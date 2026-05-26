@@ -1,0 +1,10 @@
+{
+    "schema_version": "0.1",
+    "source_model_id": "model_b",
+    "target_model_id": "model_a",
+    "interaction_turn": 3,
+    "values": {
+        "communion": 2.6672532646427713
+    },
+    "context": "workplace_colleague_conversation"
+}
