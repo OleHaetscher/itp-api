@@ -1,0 +1,52 @@
+{
+  "caption": "A Formal Model of Affiliative Interpersonality",
+  "author": "Stefan Westermann; Sven Banisch",
+  "version": "0.1.0",
+  "unitOfAnalysis": "dyadic",
+  "stateSpaces": [
+    {
+      "caption": "Relational state space",
+      "type": "continuous",
+      "dimensionRange": {
+        "lower": {
+          "value": 0,
+          "inclusive": true
+        },
+        "upper": {
+          "value": 1,
+          "inclusive": true
+        }
+      },
+      "dimensions": [
+        {
+          "caption": "Reciprocal friendliness",
+          "abbreviation": "FF",
+          "description": "Relative frequency or probability of the dyadic relation in which individual A is approach-motivated or friendly and individual B is approach-motivated or friendly. This corresponds to the relation aF bF."
+        },
+        {
+          "caption": "A distance and B friendliness",
+          "abbreviation": "DF",
+          "description": "Relative frequency or probability of the dyadic relation in which individual A is avoidance-motivated or distancing and individual B is approach-motivated or friendly. This corresponds to the relation aD bF."
+        },
+        {
+          "caption": "A friendliness and B distance",
+          "abbreviation": "FD",
+          "description": "Relative frequency or probability of the dyadic relation in which individual A is approach-motivated or friendly and individual B is avoidance-motivated or distancing. This corresponds to the relation aF bD."
+        },
+        {
+          "caption": "Reciprocal distance",
+          "abbreviation": "DD",
+          "description": "Relative frequency or probability of the dyadic relation in which individual A is avoidance-motivated or distancing and individual B is avoidance-motivated or distancing. This corresponds to the relation aD bD."
+        }
+      ],
+      "constraints": [
+        {
+          "type": "sumEquals",
+          "dimensions": ["FF", "DF", "FD", "DD"],
+          "value": 1,
+          "description": "The four dyadic relation frequencies form a probability vector in the relational state space; therefore, FF + DF + FD + DD must equal 1."
+        }
+      ]
+    }
+  ]
+}

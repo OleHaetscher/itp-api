@@ -1,0 +1,205 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/westermannlab/itp/v0.1.0/schema/interpersonal-state-space.schema.json",
+  "title": "Interpersonal state space schema",
+  "description": "Generic schema for describing the state space(s) of a formal model of interpersonal dynamics.",
+  "type": "object",
+  "required": ["caption", "version", "unitOfAnalysis", "stateSpaces"],
+  "properties": {
+    "caption": {
+      "type": "string"
+    },
+    "author": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "unitOfAnalysis": {
+      "description": "Defines the unit of analysis for the model. In a monadic model, each agent has its own state space. In a dyadic model, the dyad has a shared state space.",
+      "type": "string",
+      "enum": ["monadic", "dyadic"]
+    },
+    "stateSpaces": {
+      "description": "List of state spaces contained in the model. Each entry must be either a continuous or a discrete state space.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "description": "A single state space definition.",
+        "oneOf": [
+          {
+            "title": "Continuous state space",
+            "description": "A continuous state space with one or more dimensions and a shared mathematical range for all dimensions.",
+            "type": "object",
+            "required": ["caption", "type", "dimensionRange", "dimensions"],
+            "properties": {
+              "caption": {
+                "type": "string"
+              },
+              "type": {
+                "const": "continuous"
+              },
+              "dimensionRange": {
+                "description": "Mathematical range that applies to each dimension of this continuous state space, for example all real numbers, greater than zero, or greater than or equal to zero.",
+                "type": "object",
+                "required": ["lower", "upper"],
+                "properties": {
+                  "lower": {
+                    "description": "Lower boundary of the dimension range, e.g.:  \"value\": 0, \"inclusive\": true.",
+                    "$ref": "#/$defs/rangeBoundary"
+                  },
+                  "upper": {
+                    "description": "Upper boundary of the dimension range, e.g.: \"value\": \"infinity\", \"inclusive\": false.",
+                    "$ref": "#/$defs/rangeBoundary"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "dimensions": {
+                "description": "List of dimensions that define this continuous state space.",
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "description": "A single dimension of the continuous state space.",
+                  "type": "object",
+                  "required": ["caption", "abbreviation", "description"],
+                  "properties": {
+                    "caption": {
+                      "type": "string"
+                    },
+                    "abbreviation": {
+                      "description": "Short abbreviation of the dimension. Only uppercase and lowercase ASCII letters are allowed, without whitespace, numbers, or special characters.",
+                      "type": "string",
+                      "pattern": "^[A-Za-z]+$"
+                    },
+                    "description": {
+                      "description": "Textual explanation of what this dimension represents.",
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "constraints": {
+                "description": "Mathematical constraints that apply to valid state vectors in this continuous state space.",
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "$ref": "#/$defs/stateSpaceConstraint"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "title": "Discrete state space",
+            "description": "A discrete state space defined by a finite set of possible states.",
+            "type": "object",
+            "required": ["caption", "type", "states"],
+            "properties": {
+              "caption": {
+                "type": "string"
+              },
+              "type": {
+                "const": "discrete"
+              },
+              "states": {
+                "description": "List of discrete states that define this discrete state space.",
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "description": "A single discrete state.",
+                  "type": "object",
+                  "required": ["caption", "abbreviation", "description"],
+                  "properties": {
+                    "caption": {
+                      "type": "string"
+                    },
+                    "abbreviation": {
+                      "description": "Short abbreviation of the discrete state. Only uppercase and lowercase ASCII letters are allowed, without whitespace, numbers, or special characters.",
+                      "type": "string",
+                      "pattern": "^[A-Za-z]+$"
+                    },
+                    "description": {
+                      "description": "Textual explanation of what this discrete state represents.",
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "rangeBoundary": {
+      "title": "Range boundary",
+      "description": "A lower or upper boundary of a mathematical range. The value can be a finite number or an infinity marker.",
+      "type": "object",
+      "required": ["value", "inclusive"],
+      "properties": {
+        "value": {
+          "description": "Boundary value. Use a number for finite boundaries, '-infinity' for negative infinity, or 'infinity' for positive infinity.",
+          "oneOf": [
+            {
+              "description": "A finite numeric boundary value.",
+              "type": "number"
+            },
+            {
+              "description": "An infinite boundary marker.",
+              "type": "string",
+              "enum": ["-infinity", "infinity"]
+            }
+          ]
+        },
+        "inclusive": {
+          "description": "Whether the boundary value is included in the range. For infinity boundaries this should normally be false.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "stateSpaceConstraint": {
+      "title": "State space constraint",
+      "description": "A mathematical constraint that applies to valid state vectors in a continuous state space.",
+      "oneOf": [
+        {
+          "title": "Sum equals constraint",
+          "description": "Specifies that the values of selected dimensions must sum to a fixed numeric value.",
+          "type": "object",
+          "required": ["type", "dimensions", "value"],
+          "properties": {
+            "type": {
+              "description": "Identifies this constraint as a sum-equals constraint.",
+              "const": "sumEquals"
+            },
+            "dimensions": {
+              "description": "List of dimension abbreviations whose values must be summed.",
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z]+$"
+              }
+            },
+            "value": {
+              "description": "Required numeric sum of the selected dimension values.",
+              "type": "number"
+            },
+            "description": {
+              "description": "Human-readable explanation of the constraint.",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}
