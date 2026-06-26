@@ -7,64 +7,36 @@
     {
       "caption": "Agency state space",
       "type": "discrete",
-      "states": [
-        {
-          "caption": "Very low agency",
-          "abbreviation": "VLA",
-          "description": "Discrete agency state corresponding to the lowest position on the agency scale. In interpersonal terms, this reflects very low dominance, assertiveness, or influence."
+      "states": {
+        "range": {
+          "minimum": -2,
+          "maximum": 2
         },
-        {
-          "caption": "Low agency",
-          "abbreviation": "LA",
-          "description": "Discrete agency state corresponding to a low position on the agency scale. In interpersonal terms, this reflects relatively submissive, unassertive, or low-influence behavior."
-        },
-        {
-          "caption": "Neutral agency",
-          "abbreviation": "NA",
-          "description": "Discrete agency state corresponding to the midpoint of the agency scale. In interpersonal terms, this reflects neither clearly dominant nor clearly submissive behavior."
-        },
-        {
-          "caption": "High agency",
-          "abbreviation": "HA",
-          "description": "Discrete agency state corresponding to a high position on the agency scale. In interpersonal terms, this reflects relatively dominant, assertive, or high-influence behavior."
-        },
-        {
-          "caption": "Very high agency",
-          "abbreviation": "VHA",
-          "description": "Discrete agency state corresponding to the highest position on the agency scale. In interpersonal terms, this reflects very high dominance, assertiveness, or influence."
+        "labels": {
+          "-2": "Very low agency",
+          "-1": "Low agency",
+          "0": "Neutral agency",
+          "1": "High agency",
+          "2": "Very high agency"
         }
-      ]
+      }
     },
     {
       "caption": "Communion state space",
       "type": "discrete",
-      "states": [
-        {
-          "caption": "Very low communion",
-          "abbreviation": "VLC",
-          "description": "Discrete communion state corresponding to the lowest position on the communion scale. In interpersonal terms, this reflects very low warmth, affiliation, friendliness, or closeness."
+      "states": {
+        "range": {
+          "minimum": -2,
+          "maximum": 2
         },
-        {
-          "caption": "Low communion",
-          "abbreviation": "LC",
-          "description": "Discrete communion state corresponding to a low position on the communion scale. In interpersonal terms, this reflects relatively cold, distant, hostile, or unaffiliative behavior."
-        },
-        {
-          "caption": "Neutral communion",
-          "abbreviation": "NC",
-          "description": "Discrete communion state corresponding to the midpoint of the communion scale. In interpersonal terms, this reflects neither clearly warm nor clearly cold behavior."
-        },
-        {
-          "caption": "High communion",
-          "abbreviation": "HC",
-          "description": "Discrete communion state corresponding to a high position on the communion scale. In interpersonal terms, this reflects relatively warm, friendly, affiliative, or close behavior."
-        },
-        {
-          "caption": "Very high communion",
-          "abbreviation": "VHC",
-          "description": "Discrete communion state corresponding to the highest position on the communion scale. In interpersonal terms, this reflects very high warmth, affiliation, friendliness, or closeness."
+        "labels": {
+          "-2": "Very low communion",
+          "-1": "Low communion",
+          "0": "Neutral communion",
+          "1": "High communion",
+          "2": "Very high communion"
         }
-      ]
+      }
     }
   ]
 }

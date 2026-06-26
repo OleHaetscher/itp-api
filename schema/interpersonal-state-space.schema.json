@@ -45,7 +45,7 @@
                 "required": ["lower", "upper"],
                 "properties": {
                   "lower": {
-                    "description": "Lower boundary of the dimension range, e.g.:  \"value\": 0, \"inclusive\": true.",
+                    "description": "Lower boundary of the dimension range, e.g.: \"value\": 0, \"inclusive\": true.",
                     "$ref": "#/$defs/rangeBoundary"
                   },
                   "upper": {
@@ -93,7 +93,7 @@
           },
           {
             "title": "Discrete state space",
-            "description": "A discrete state space defined by a finite set of possible states.",
+            "description": "A discrete state space defined either by an explicit finite set of possible states or by an ordinal integer range.",
             "type": "object",
             "required": ["caption", "type", "states"],
             "properties": {
@@ -104,29 +104,38 @@
                 "const": "discrete"
               },
               "states": {
-                "description": "List of discrete states that define this discrete state space.",
-                "type": "array",
-                "minItems": 1,
-                "items": {
-                  "description": "A single discrete state.",
-                  "type": "object",
-                  "required": ["caption", "abbreviation", "description"],
-                  "properties": {
-                    "caption": {
-                      "type": "string"
-                    },
-                    "abbreviation": {
-                      "description": "Short abbreviation of the discrete state. Only uppercase and lowercase ASCII letters are allowed, without whitespace, numbers, or special characters.",
-                      "type": "string",
-                      "pattern": "^[A-Za-z]+$"
-                    },
-                    "description": {
-                      "description": "Textual explanation of what this discrete state represents.",
-                      "type": "string"
+                "description": "Discrete states, either listed explicitly or defined compactly as an ordinal integer range.",
+                "oneOf": [
+                  {
+                    "description": "Explicit list of discrete states.",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "$ref": "#/$defs/discreteState"
                     }
                   },
-                  "additionalProperties": false
-                }
+                  {
+                    "description": "Compact ordinal integer range of discrete states.",
+                    "type": "object",
+                    "required": ["range"],
+                    "properties": {
+                      "range": {
+                        "$ref": "#/$defs/ordinalStateRange"
+                      },
+                      "labels": {
+                        "description": "Optional human-readable labels for selected ordinal values. Keys must be integer values represented as strings.",
+                        "type": "object",
+                        "propertyNames": {
+                          "pattern": "^-?[0-9]+$"
+                        },
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                ]
               }
             },
             "additionalProperties": false
@@ -159,6 +168,44 @@
         "inclusive": {
           "description": "Whether the boundary value is included in the range. For infinity boundaries this should normally be false.",
           "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "discreteState": {
+      "title": "Discrete state",
+      "description": "A single explicitly defined discrete state.",
+      "type": "object",
+      "required": ["caption", "abbreviation", "description"],
+      "properties": {
+        "caption": {
+          "type": "string"
+        },
+        "abbreviation": {
+          "description": "Short abbreviation of the discrete state. Only uppercase and lowercase ASCII letters are allowed, without whitespace, numbers, or special characters.",
+          "type": "string",
+          "pattern": "^[A-Za-z]+$"
+        },
+        "description": {
+          "description": "Textual explanation of what this discrete state represents.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ordinalStateRange": {
+      "title": "Ordinal state range",
+      "description": "Compact definition of ordered integer-valued discrete states. The range includes all integer values from minimum to maximum.",
+      "type": "object",
+      "required": ["minimum", "maximum"],
+      "properties": {
+        "minimum": {
+          "description": "Smallest allowed integer value of the ordinal state range.",
+          "type": "integer"
+        },
+        "maximum": {
+          "description": "Largest allowed integer value of the ordinal state range.",
+          "type": "integer"
         }
       },
       "additionalProperties": false
