@@ -1,0 +1,60 @@
+{
+  "caption": "LASSI box-shaped agency-communion state space",
+  "author": "Ole Hätscher; Leon Pielage; Pascal Kockwelp; Simon M. Breil; Anna Junga; Jennifer Dabel; Benjamin Risse; Bernhard Marschall; Mitja D. Back",
+  "version": "0.2.0",
+  "stateSpaces": [
+    {
+      "caption": "Discrete agency-communion box",
+      "abbreviation": "AC",
+      "description": "Box-shaped discrete interpersonal state space used to represent agent behavior along the two IPC dimensions agency and communion.",
+      "type": "discrete",
+      "coordinates": {
+        "system": "cartesian",
+        "dimensions": [
+          {
+            "caption": "Agency",
+            "abbreviation": "A",
+            "description": "Influence, control, or mastery, ranging from submissive or unassured to dominant or assured.",
+            "range": {
+              "minimum": 1,
+              "maximum": 5
+            },
+            "labels": {
+              "1": "Very low agency",
+              "3": "Neutral agency",
+              "5": "Very high agency"
+            }
+          },
+          {
+            "caption": "Communion",
+            "abbreviation": "C",
+            "description": "Closeness, intimacy, affiliation, or warmth, ranging from hostile or cold to friendly or warm.",
+            "range": {
+              "minimum": 1,
+              "maximum": 5
+            },
+            "labels": {
+              "1": "Very low communion",
+              "3": "Neutral communion",
+              "5": "Very high communion"
+            }
+          }
+        ]
+      },
+      "export": {
+        "symbol": "s",
+        "representation": "coordinates",
+        "components": [
+          "A",
+          "C"
+        ],
+        "notation": "s = (A, C)",
+        "format": "object",
+        "description": "A momentary LASSI interpersonal behavior state represented by discrete agency and communion coordinates."
+      },
+      "geometry": {
+        "shape": "box"
+      }
+    }
+  ]
+}

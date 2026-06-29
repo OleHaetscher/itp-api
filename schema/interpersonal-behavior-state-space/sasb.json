@@ -1,0 +1,255 @@
+{
+  "caption": "Structured Analysis of Social Behavior (SASB): transitive and intransitive focus",
+  "author": "Lorna Smith Benjamin",
+  "version": "0.2.0",
+  "stateSpaces": [
+    {
+      "caption": "SASB transitive focus state space",
+      "abbreviation": "SASBT",
+      "description": "Discretized version of the diamond-shaped interpersonal state space for the transitive focus of the Structured Analysis of Social Behavior (SASB). The space is organized by affiliation and interdependence, with the eight classical transitive SASB cluster labels 1-1 through 1-8 placed on the outer rhombus.",
+      "type": "discrete",
+      "coordinates": {
+        "system": "cartesian",
+        "dimensions": [
+          {
+            "caption": "Affiliation",
+            "abbreviation": "Aff",
+            "description": "Horizontal interpersonal dimension ranging from hostile or attacking behavior to loving or affiliative behavior.",
+            "range": {
+              "minimum": -2,
+              "maximum": 2
+            },
+            "labels": {
+              "-2": "maximally hostile",
+              "0": "neutral affiliation",
+              "2": "maximally loving"
+            }
+          },
+          {
+            "caption": "Interdependence",
+            "abbreviation": "Int",
+            "description": "Vertical interpersonal dimension ranging from controlling or managing behavior to emancipating or autonomy-granting behavior.",
+            "range": {
+              "minimum": -2,
+              "maximum": 2
+            },
+            "labels": {
+              "-2": "maximally controlling",
+              "0": "neutral interdependence",
+              "2": "maximally emancipating"
+            }
+          }
+        ],
+        "stateLabels": [
+          {
+            "coordinates": {
+              "Aff": 0,
+              "Int": 2
+            },
+            "label": "1-1",
+            "description": "Emancipate / Separate"
+          },
+          {
+            "coordinates": {
+              "Aff": 1,
+              "Int": 1
+            },
+            "label": "1-2",
+            "description": "Affirm / Understand"
+          },
+          {
+            "coordinates": {
+              "Aff": 2,
+              "Int": 0
+            },
+            "label": "1-3",
+            "description": "Love / Approach"
+          },
+          {
+            "coordinates": {
+              "Aff": 1,
+              "Int": -1
+            },
+            "label": "1-4",
+            "description": "Nurture / Protect"
+          },
+          {
+            "coordinates": {
+              "Aff": 0,
+              "Int": -2
+            },
+            "label": "1-5",
+            "description": "Control / Manage"
+          },
+          {
+            "coordinates": {
+              "Aff": -1,
+              "Int": -1
+            },
+            "label": "1-6",
+            "description": "Blame / Criticize"
+          },
+          {
+            "coordinates": {
+              "Aff": -2,
+              "Int": 0
+            },
+            "label": "1-7",
+            "description": "Attack / Reject"
+          },
+          {
+            "coordinates": {
+              "Aff": -1,
+              "Int": 1
+            },
+            "label": "1-8",
+            "description": "Ignore / Neglect"
+          }
+        ]
+      },
+      "export": {
+        "symbol": "s1",
+        "representation": "coordinates",
+        "components": [
+          "Aff",
+          "Int"
+        ],
+        "notation": "s1 = (Aff, Int)",
+        "format": "object",
+        "description": "A momentary transitive SASB state represented by affiliation and interdependence coordinates."
+      },
+      "geometry": {
+        "shape": "diamond",
+        "center": {
+          "Aff": 0,
+          "Int": 0
+        },
+        "radius": 2
+      }
+    },
+    {
+      "caption": "SASB intransitive focus state space",
+      "abbreviation": "SASBI",
+      "description": "Discretized version of the diamond-shaped interpersonal state space for the intransitive focus of the Structured Analysis of Social Behavior (SASB). The space is organized by affiliation and interdependence, with the eight classical intransitive SASB cluster labels 2-1 through 2-8 placed on the outer rhombus.",
+      "type": "discrete",
+      "coordinates": {
+        "system": "cartesian",
+        "dimensions": [
+          {
+            "caption": "Affiliation",
+            "abbreviation": "Aff",
+            "description": "Horizontal interpersonal dimension ranging from hostile or rejecting reactions to loving or affiliative reactions.",
+            "range": {
+              "minimum": -2,
+              "maximum": 2
+            },
+            "labels": {
+              "-2": "maximally hostile",
+              "0": "neutral affiliation",
+              "2": "maximally loving"
+            }
+          },
+          {
+            "caption": "Interdependence",
+            "abbreviation": "Int",
+            "description": "Vertical interpersonal dimension ranging from submitting or yielding reactions to separating or autonomy-asserting reactions.",
+            "range": {
+              "minimum": -2,
+              "maximum": 2
+            },
+            "labels": {
+              "-2": "maximally submitting",
+              "0": "neutral interdependence",
+              "2": "maximally separating"
+            }
+          }
+        ],
+        "stateLabels": [
+          {
+            "coordinates": {
+              "Aff": 0,
+              "Int": 2
+            },
+            "label": "2-1",
+            "description": "Separate"
+          },
+          {
+            "coordinates": {
+              "Aff": 1,
+              "Int": 1
+            },
+            "label": "2-2",
+            "description": "Disclose"
+          },
+          {
+            "coordinates": {
+              "Aff": 2,
+              "Int": 0
+            },
+            "label": "2-3",
+            "description": "Reactive Love"
+          },
+          {
+            "coordinates": {
+              "Aff": 1,
+              "Int": -1
+            },
+            "label": "2-4",
+            "description": "Trust"
+          },
+          {
+            "coordinates": {
+              "Aff": 0,
+              "Int": -2
+            },
+            "label": "2-5",
+            "description": "Submit"
+          },
+          {
+            "coordinates": {
+              "Aff": -1,
+              "Int": -1
+            },
+            "label": "2-6",
+            "description": "Sulk"
+          },
+          {
+            "coordinates": {
+              "Aff": -2,
+              "Int": 0
+            },
+            "label": "2-7",
+            "description": "Recoil"
+          },
+          {
+            "coordinates": {
+              "Aff": -1,
+              "Int": 1
+            },
+            "label": "2-8",
+            "description": "Wall Off"
+          }
+        ]
+      },
+      "export": {
+        "symbol": "s2",
+        "representation": "coordinates",
+        "components": [
+          "Aff",
+          "Int"
+        ],
+        "notation": "s2 = (Aff, Int)",
+        "format": "object",
+        "description": "A momentary intransitive SASB state represented by affiliation and interdependence coordinates."
+      },
+      "geometry": {
+        "shape": "diamond",
+        "center": {
+          "Aff": 0,
+          "Int": 0
+        },
+        "radius": 2
+      }
+    }
+  ]
+}

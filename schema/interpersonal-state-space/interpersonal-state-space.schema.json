@@ -4,7 +4,12 @@
   "title": "Interpersonal state space schema",
   "description": "Generic schema for describing the state space(s) of a formal model of interpersonal dynamics.",
   "type": "object",
-  "required": ["caption", "version", "unitOfAnalysis", "stateSpaces"],
+  "required": [
+    "caption",
+    "version",
+    "unitOfAnalysis",
+    "stateSpaces"
+  ],
   "properties": {
     "caption": {
       "type": "string"
@@ -18,7 +23,10 @@
     "unitOfAnalysis": {
       "description": "Defines the unit of analysis for the model. In a monadic model, each agent has its own state space. In a dyadic model, the dyad has a shared state space.",
       "type": "string",
-      "enum": ["monadic", "dyadic"]
+      "enum": [
+        "monadic",
+        "dyadic"
+      ]
     },
     "stateSpaces": {
       "description": "List of state spaces contained in the model. Each entry must be either a continuous or a discrete state space.",
@@ -31,7 +39,12 @@
             "title": "Continuous state space",
             "description": "A continuous state space with one or more dimensions and a shared mathematical range for all dimensions.",
             "type": "object",
-            "required": ["caption", "type", "dimensionRange", "dimensions"],
+            "required": [
+              "caption",
+              "type",
+              "dimensionRange",
+              "dimensions"
+            ],
             "properties": {
               "caption": {
                 "type": "string"
@@ -42,7 +55,10 @@
               "dimensionRange": {
                 "description": "Mathematical range that applies to each dimension of this continuous state space, for example all real numbers, greater than zero, or greater than or equal to zero.",
                 "type": "object",
-                "required": ["lower", "upper"],
+                "required": [
+                  "lower",
+                  "upper"
+                ],
                 "properties": {
                   "lower": {
                     "description": "Lower boundary of the dimension range, e.g.: \"value\": 0, \"inclusive\": true.",
@@ -62,7 +78,11 @@
                 "items": {
                   "description": "A single dimension of the continuous state space.",
                   "type": "object",
-                  "required": ["caption", "abbreviation", "description"],
+                  "required": [
+                    "caption",
+                    "abbreviation",
+                    "description"
+                  ],
                   "properties": {
                     "caption": {
                       "type": "string"
@@ -95,7 +115,11 @@
             "title": "Discrete state space",
             "description": "A discrete state space defined either by an explicit finite set of possible states or by an ordinal integer range.",
             "type": "object",
-            "required": ["caption", "type", "states"],
+            "required": [
+              "caption",
+              "type",
+              "states"
+            ],
             "properties": {
               "caption": {
                 "type": "string"
@@ -117,7 +141,9 @@
                   {
                     "description": "Compact ordinal integer range of discrete states.",
                     "type": "object",
-                    "required": ["range"],
+                    "required": [
+                      "range"
+                    ],
                     "properties": {
                       "range": {
                         "$ref": "#/$defs/ordinalStateRange"
@@ -149,7 +175,10 @@
       "title": "Range boundary",
       "description": "A lower or upper boundary of a mathematical range. The value can be a finite number or an infinity marker.",
       "type": "object",
-      "required": ["value", "inclusive"],
+      "required": [
+        "value",
+        "inclusive"
+      ],
       "properties": {
         "value": {
           "description": "Boundary value. Use a number for finite boundaries, '-infinity' for negative infinity, or 'infinity' for positive infinity.",
@@ -161,7 +190,10 @@
             {
               "description": "An infinite boundary marker.",
               "type": "string",
-              "enum": ["-infinity", "infinity"]
+              "enum": [
+                "-infinity",
+                "infinity"
+              ]
             }
           ]
         },
@@ -176,7 +208,11 @@
       "title": "Discrete state",
       "description": "A single explicitly defined discrete state.",
       "type": "object",
-      "required": ["caption", "abbreviation", "description"],
+      "required": [
+        "caption",
+        "abbreviation",
+        "description"
+      ],
       "properties": {
         "caption": {
           "type": "string"
@@ -197,7 +233,10 @@
       "title": "Ordinal state range",
       "description": "Compact definition of ordered integer-valued discrete states. The range includes all integer values from minimum to maximum.",
       "type": "object",
-      "required": ["minimum", "maximum"],
+      "required": [
+        "minimum",
+        "maximum"
+      ],
       "properties": {
         "minimum": {
           "description": "Smallest allowed integer value of the ordinal state range.",
@@ -218,7 +257,11 @@
           "title": "Sum equals constraint",
           "description": "Specifies that the values of selected dimensions must sum to a fixed numeric value.",
           "type": "object",
-          "required": ["type", "dimensions", "value"],
+          "required": [
+            "type",
+            "dimensions",
+            "value"
+          ],
           "properties": {
             "type": {
               "description": "Identifies this constraint as a sum-equals constraint.",

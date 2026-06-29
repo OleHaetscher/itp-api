@@ -1,0 +1,56 @@
+{
+  "caption": "Classical interpersonal circumplex state space",
+  "author": "Timothy Leary; Donald J. Kiesler; Jerry S. Wiggins",
+  "version": "0.2.0",
+  "stateSpaces": [
+    {
+      "caption": "Interpersonal circumplex",
+      "abbreviation": "IPC",
+      "description": "Circular interpersonal state space representing behavior by angular position in the agency-communion circumplex and radial amplitude from the neutral center. The angle zero direction is positive communion, and angles increase counterclockwise toward positive agency.",
+      "type": "circular",
+      "coordinates": {
+        "system": "polar",
+        "angle": {
+          "caption": "Circumplex angle",
+          "abbreviation": "Theta",
+          "description": "Angular position in the interpersonal circumplex.",
+          "unit": "degree",
+          "labels": {
+            "0": "LM",
+            "45": "NO",
+            "90": "PA",
+            "135": "BC",
+            "180": "DE",
+            "225": "FG",
+            "270": "HI",
+            "315": "JK"
+          },
+          "zeroDirection": "positive communion",
+          "orientation": "counterclockwise"
+        },
+        "radius": {
+          "caption": "Amplitude",
+          "abbreviation": "R",
+          "description": "Distance from the neutral center of the interpersonal circumplex, representing the intensity of interpersonal behavior. The neutral center itself is excluded because the angular position is undefined at radius zero.",
+          "range": {
+            "minimum": 0,
+            "maximum": 1,
+            "minimumInclusive": false,
+            "maximumInclusive": true
+          }
+        }
+      },
+      "export": {
+        "symbol": "s",
+        "representation": "coordinates",
+        "components": [
+          "Theta",
+          "R"
+        ],
+        "notation": "s = (Theta, R)",
+        "format": "object",
+        "description": "A momentary interpersonal state represented by circumplex angle and radial amplitude."
+      }
+    }
+  ]
+}

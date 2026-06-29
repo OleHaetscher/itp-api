@@ -1,0 +1,703 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/westermannlab/itp/v0.2.0/schema/interpersonal-behavior-state-space.schema.json",
+  "title": "Interpersonal behavior state space schema (IBSSS)",
+  "description": "Schema for describing state spaces of interpersonal behavior, including Euclidean spaces, circular spaces, and discrete spaces with geometric constraints.",
+  "type": "object",
+  "required": [
+    "caption",
+    "version",
+    "stateSpaces"
+  ],
+  "properties": {
+    "caption": {
+      "type": "string"
+    },
+    "author": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "stateSpaces": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/stateSpace"
+      }
+    }
+  },
+  "$defs": {
+    "stateSpace": {
+      "title": "State space",
+      "description": "A state space for interpersonal behavior.",
+      "type": "object",
+      "required": [
+        "caption",
+        "type",
+        "coordinates"
+      ],
+      "properties": {
+        "caption": {
+          "type": "string"
+        },
+        "abbreviation": {
+          "type": "string",
+          "pattern": "^[A-Za-z]+$"
+        },
+        "description": {
+          "type": "string"
+        },
+        "type": {
+          "description": "General mathematical type of the state space.",
+          "type": "string",
+          "enum": [
+            "euclidean",
+            "discrete",
+            "circular"
+          ]
+        },
+        "coordinates": {
+          "description": "Coordinate representation used to describe states."
+        },
+        "geometry": {
+          "description": "Optional geometric constraint on valid states.",
+          "$ref": "#/$defs/geometry"
+        },
+        "export": {
+          "description": "Mathematical and machine-readable export representation of a momentary state in this state space.",
+          "$ref": "#/$defs/stateSpaceExport"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "euclidean"
+            },
+            "coordinates": {
+              "$ref": "#/$defs/cartesianCoordinates"
+            }
+          }
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "circular"
+            },
+            "coordinates": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/polarCoordinates"
+                },
+                {
+                  "$ref": "#/$defs/angularCoordinates"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "discrete"
+            },
+            "coordinates": {
+              "$ref": "#/$defs/discreteCoordinates"
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "cartesianCoordinates": {
+      "title": "Cartesian coordinates",
+      "description": "Continuous Euclidean coordinate representation.",
+      "type": "object",
+      "required": [
+        "system",
+        "dimensions"
+      ],
+      "properties": {
+        "system": {
+          "const": "cartesian"
+        },
+        "dimensions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/continuousDimension"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "polarCoordinates": {
+      "title": "Polar coordinates",
+      "description": "Circular coordinate representation using angle and optional radius or amplitude.",
+      "type": "object",
+      "required": [
+        "system",
+        "angle"
+      ],
+      "properties": {
+        "system": {
+          "const": "polar"
+        },
+        "angle": {
+          "$ref": "#/$defs/angularDimension"
+        },
+        "radius": {
+          "$ref": "#/$defs/continuousDimension"
+        }
+      },
+      "additionalProperties": false
+    },
+    "angularCoordinates": {
+      "title": "Angular coordinates",
+      "description": "Coordinate representation with one or more periodic angular dimensions. One angular dimension can represent a circular state space.",
+      "type": "object",
+      "required": [
+        "system",
+        "dimensions"
+      ],
+      "properties": {
+        "system": {
+          "const": "angular"
+        },
+        "dimensions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/angularDimension"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "discreteCoordinates": {
+      "title": "Discrete Cartesian coordinates",
+      "description": "Cartesian coordinate representation with one or more ordinal integer dimensions.",
+      "type": "object",
+      "required": [
+        "system",
+        "dimensions"
+      ],
+      "properties": {
+        "system": {
+          "const": "cartesian"
+        },
+        "dimensions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/discreteDimension"
+          }
+        },
+        "stateLabels": {
+          "description": "Optional labels for selected discrete states, identified by their coordinate values.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/discreteStateLabel"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "continuousDimension": {
+      "title": "Continuous dimension",
+      "type": "object",
+      "required": [
+        "caption",
+        "abbreviation",
+        "range"
+      ],
+      "properties": {
+        "caption": {
+          "type": "string"
+        },
+        "abbreviation": {
+          "type": "string",
+          "pattern": "^[A-Za-z]+$"
+        },
+        "description": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/numericRange"
+        }
+      },
+      "additionalProperties": false
+    },
+    "discreteDimension": {
+      "title": "Discrete dimension",
+      "type": "object",
+      "required": [
+        "caption",
+        "abbreviation",
+        "range"
+      ],
+      "properties": {
+        "caption": {
+          "type": "string"
+        },
+        "abbreviation": {
+          "type": "string",
+          "pattern": "^[A-Za-z]+$"
+        },
+        "description": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/integerRange"
+        },
+        "labels": {
+          "description": "Optional labels for selected integer values.",
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^-?[0-9]+$"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "discreteStateLabel": {
+      "title": "Discrete state label",
+      "description": "A label for a selected discrete state, identified by coordinate values keyed by dimension abbreviation.",
+      "type": "object",
+      "required": [
+        "coordinates",
+        "label"
+      ],
+      "properties": {
+        "coordinates": {
+          "description": "Coordinate values of the labeled state, keyed by dimension abbreviation.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer"
+          }
+        },
+        "label": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "angularDimension": {
+      "title": "Angular dimension",
+      "type": "object",
+      "required": [
+        "caption",
+        "abbreviation",
+        "unit"
+      ],
+      "properties": {
+        "caption": {
+          "type": "string"
+        },
+        "abbreviation": {
+          "type": "string",
+          "pattern": "^[A-Za-z]+$"
+        },
+        "description": {
+          "type": "string"
+        },
+        "unit": {
+          "type": "string",
+          "enum": [
+            "degree",
+            "radian"
+          ]
+        },
+        "labels": {
+          "description": "Optional labels for selected angular values. Keys must be angular values represented as strings in the unit specified for this dimension.",
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "zeroDirection": {
+          "description": "Meaning of angle zero, for example agency-positive or communion-positive.",
+          "type": "string"
+        },
+        "orientation": {
+          "description": "Direction in which angles increase.",
+          "type": "string",
+          "enum": [
+            "clockwise",
+            "counterclockwise"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "numericRange": {
+      "title": "Numeric range",
+      "type": "object",
+      "required": [
+        "minimum",
+        "maximum"
+      ],
+      "properties": {
+        "minimum": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "-infinity"
+              ]
+            }
+          ]
+        },
+        "maximum": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "infinity"
+              ]
+            }
+          ]
+        },
+        "minimumInclusive": {
+          "type": "boolean",
+          "default": true
+        },
+        "maximumInclusive": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "integerRange": {
+      "title": "Integer range",
+      "description": "Inclusive range of integer values.",
+      "type": "object",
+      "required": [
+        "minimum",
+        "maximum"
+      ],
+      "properties": {
+        "minimum": {
+          "type": "integer"
+        },
+        "maximum": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false
+    },
+    "geometry": {
+      "title": "Geometry",
+      "description": "Geometric restriction on valid states.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/boxGeometry"
+        },
+        {
+          "$ref": "#/$defs/circleGeometry"
+        },
+        {
+          "$ref": "#/$defs/diamondGeometry"
+        },
+        {
+          "$ref": "#/$defs/constraintGeometry"
+        }
+      ]
+    },
+    "boxGeometry": {
+      "title": "Box geometry",
+      "description": "All coordinate combinations within the dimension ranges are valid.",
+      "type": "object",
+      "required": [
+        "shape"
+      ],
+      "properties": {
+        "shape": {
+          "const": "box"
+        }
+      },
+      "additionalProperties": false
+    },
+    "circleGeometry": {
+      "title": "Circle geometry",
+      "description": "Circular or disk-shaped geometry. A circle contains only states at exactly the specified radius from the center; a disk contains all states with distance less than or equal to the specified radius.",
+      "type": "object",
+      "required": [
+        "shape",
+        "center",
+        "radius"
+      ],
+      "properties": {
+        "shape": {
+          "type": "string",
+          "enum": [
+            "circle",
+            "disk"
+          ]
+        },
+        "center": {
+          "description": "Coordinate values of the center point, keyed by dimension abbreviation.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "radius": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "diamondGeometry": {
+      "title": "Diamond geometry",
+      "description": "Diamond-shaped geometry defined by all states whose Manhattan distance from the center is less than or equal to the specified radius.",
+      "type": "object",
+      "required": [
+        "shape",
+        "center",
+        "radius"
+      ],
+      "properties": {
+        "shape": {
+          "const": "diamond"
+        },
+        "center": {
+          "description": "Coordinate values of the center point, keyed by dimension abbreviation.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "radius": {
+          "description": "Maximum Manhattan distance from the center.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "constraintGeometry": {
+      "title": "Constraint geometry",
+      "description": "Geometry defined by one or more mathematical constraints.",
+      "type": "object",
+      "required": [
+        "shape",
+        "constraints"
+      ],
+      "properties": {
+        "shape": {
+          "const": "constrained"
+        },
+        "constraints": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/constraint"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "constraint": {
+      "title": "Constraint",
+      "description": "A symbolic constraint on coordinates.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/sumEqualsConstraint"
+        },
+        {
+          "$ref": "#/$defs/weightedSumConstraint"
+        },
+        {
+          "$ref": "#/$defs/manhattanConstraint"
+        }
+      ]
+    },
+    "sumEqualsConstraint": {
+      "title": "Sum equals constraint",
+      "type": "object",
+      "required": [
+        "type",
+        "dimensions",
+        "value"
+      ],
+      "properties": {
+        "type": {
+          "const": "sumEquals"
+        },
+        "dimensions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z]+$"
+          }
+        },
+        "value": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "weightedSumConstraint": {
+      "title": "Weighted sum constraint",
+      "description": "Specifies a linear equality or inequality over one or more dimensions. This can be used to define half-spaces, linear boundaries, or simplex-like state spaces, for example a probability vector with four components constrained by p1 + p2 + p3 + p4 = 1.",
+      "type": "object",
+      "required": [
+        "type",
+        "terms",
+        "operator",
+        "value"
+      ],
+      "properties": {
+        "type": {
+          "const": "weightedSum"
+        },
+        "terms": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "dimension",
+              "weight"
+            ],
+            "properties": {
+              "dimension": {
+                "type": "string",
+                "pattern": "^[A-Za-z]+$"
+              },
+              "weight": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "operator": {
+          "type": "string",
+          "enum": [
+            "<",
+            "<=",
+            "=",
+            ">=",
+            ">"
+          ]
+        },
+        "value": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "manhattanConstraint": {
+      "title": "Manhattan distance constraint",
+      "description": "Useful for diamond-shaped discrete or continuous spaces.",
+      "type": "object",
+      "required": [
+        "type",
+        "center",
+        "operator",
+        "value"
+      ],
+      "properties": {
+        "type": {
+          "const": "manhattanDistance"
+        },
+        "center": {
+          "description": "Coordinate values of the center point, keyed by dimension abbreviation.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "operator": {
+          "type": "string",
+          "enum": [
+            "<=",
+            "<",
+            "=",
+            ">",
+            ">="
+          ]
+        },
+        "value": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "stateSpaceExport": {
+      "title": "State space export",
+      "description": "Mathematical and machine-readable export representation of a momentary state in a state space.",
+      "type": "object",
+      "required": [
+        "symbol",
+        "representation",
+        "components",
+        "format"
+      ],
+      "properties": {
+        "symbol": {
+          "description": "Mathematical symbol used for the exported state.",
+          "type": "string"
+        },
+        "representation": {
+          "description": "Mathematical form of the exported state.",
+          "type": "string",
+          "enum": [
+            "scalar",
+            "vector",
+            "coordinates"
+          ]
+        },
+        "components": {
+          "description": "Ordered list of coordinate or dimension abbreviations that define the exported state.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z]+$"
+          }
+        },
+        "notation": {
+          "description": "Human-readable mathematical notation of the exported state.",
+          "type": "string"
+        },
+        "format": {
+          "description": "Preferred machine-readable format for exported states.",
+          "type": "string",
+          "enum": [
+            "array",
+            "object"
+          ]
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

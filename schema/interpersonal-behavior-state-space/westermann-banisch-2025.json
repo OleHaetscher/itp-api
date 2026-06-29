@@ -1,0 +1,71 @@
+{
+  "caption": "A Formal Model of Affiliative Interpersonality: individual affiliative behavior simplex",
+  "author": "Stefan Westermann; Sven Banisch",
+  "version": "0.2.0",
+  "stateSpaces": [
+    {
+      "caption": "Individual friendly-distancing behavior simplex",
+      "abbreviation": "FDS",
+      "description": "Continuous Euclidean simplex representing the behavioral availability of one individual who can express either friendly or distancing interpersonal behavior. The two components represent the relative availability of friendly behavior and distancing behavior and are constrained to sum to 1.",
+      "type": "euclidean",
+      "coordinates": {
+        "system": "cartesian",
+        "dimensions": [
+          {
+            "caption": "Friendly behavior",
+            "abbreviation": "F",
+            "description": "Relative availability or probability of friendly interpersonal behavior, associated with affiliative approach motivation.",
+            "range": {
+              "minimum": 0,
+              "maximum": 1,
+              "minimumInclusive": true,
+              "maximumInclusive": true
+            }
+          },
+          {
+            "caption": "Distancing behavior",
+            "abbreviation": "D",
+            "description": "Relative availability or probability of distancing interpersonal behavior, associated with affiliative avoidance motivation.",
+            "range": {
+              "minimum": 0,
+              "maximum": 1,
+              "minimumInclusive": true,
+              "maximumInclusive": true
+            }
+          }
+        ]
+      },
+      "export": {
+        "symbol": "x",
+        "representation": "vector",
+        "components": [
+          "F",
+          "D"
+        ],
+        "notation": "x = (F, D)",
+        "format": "array",
+        "description": "A momentary individual behavioral state represented as a vector of relative availabilities of friendly and distancing behavior."
+      },
+      "geometry": {
+        "shape": "constrained",
+        "constraints": [
+          {
+            "type": "weightedSum",
+            "terms": [
+              {
+                "dimension": "F",
+                "weight": 1
+              },
+              {
+                "dimension": "D",
+                "weight": 1
+              }
+            ],
+            "operator": "=",
+            "value": 1
+          }
+        ]
+      }
+    }
+  ]
+}
