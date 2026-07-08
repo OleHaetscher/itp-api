@@ -65,7 +65,10 @@ class BaseFormalModel(ABC):
 
         pass
 
-    def from_message(self, message: dict[str, Any]) -> None:
+    def from_message(
+        self,
+        message: dict[str, Any],
+    ) -> None:
         """
         Integrate a numerical ITP message into the model.
 
@@ -76,6 +79,7 @@ class BaseFormalModel(ABC):
         """
 
         self.validate_model_interface()
+
         self.specification.validate_message(
             message=message,
             allowed_dimensions=self.dimensions,
@@ -88,8 +92,8 @@ class BaseFormalModel(ABC):
 
     def to_message(
         self,
-        target_model_id: str,
-        interaction_turn: int,
+        target_agent: str,
+        timecode: dict[str, Any],
         context: str,
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
@@ -97,8 +101,8 @@ class BaseFormalModel(ABC):
         Generate a numerical ITP message from the model.
 
         Args:
-            target_model_id: Identifier of the receiving model.
-            interaction_turn: Sequential turn in the interaction.
+            target_agent: Identifier of the receiving agent.
+            timecode: Time information for the message.
             context: String describing the interaction context.
             metadata: Optional additional information.
 
@@ -111,9 +115,9 @@ class BaseFormalModel(ABC):
         values = self.generate_numerical_output(context=context)
 
         message = self.specification.make_message(
-            source_model_id=self.model_id,
-            target_model_id=target_model_id,
-            interaction_turn=interaction_turn,
+            source_agent=self.model_id,
+            target_agent=target_agent,
+            timecode=timecode,
             values=values,
             context=context,
             metadata=metadata,
@@ -126,7 +130,10 @@ class BaseFormalModel(ABC):
 
         return message
 
-    def from_json(self, source: str | Path) -> None:
+    def from_json(
+        self,
+        source: str | Path,
+    ) -> None:
         """
         Integrate numerical input from a JSON message.
 
@@ -141,8 +148,8 @@ class BaseFormalModel(ABC):
 
     def to_json(
         self,
-        target_model_id: str,
-        interaction_turn: int,
+        target_agent: str,
+        timecode: dict[str, Any],
         context: str,
         metadata: dict[str, Any] | None = None,
         indent: int = 4,
@@ -151,8 +158,8 @@ class BaseFormalModel(ABC):
         Generate numerical output as a JSON message.
 
         Args:
-            target_model_id: Identifier of the receiving model.
-            interaction_turn: Sequential turn in the interaction.
+            target_agent: Identifier of the receiving agent.
+            timecode: Time information for the message.
             context: String describing the interaction context.
             metadata: Optional additional information.
             indent: Number of spaces used for JSON indentation.
@@ -162,8 +169,8 @@ class BaseFormalModel(ABC):
         """
 
         message = self.to_message(
-            target_model_id=target_model_id,
-            interaction_turn=interaction_turn,
+            target_agent=target_agent,
+            timecode=timecode,
             context=context,
             metadata=metadata,
         )
@@ -173,8 +180,8 @@ class BaseFormalModel(ABC):
     def save_json(
         self,
         path: str | Path,
-        target_model_id: str,
-        interaction_turn: int,
+        target_agent: str,
+        timecode: dict[str, Any],
         context: str,
         metadata: dict[str, Any] | None = None,
         indent: int = 4,
@@ -184,8 +191,8 @@ class BaseFormalModel(ABC):
 
         Args:
             path: Path to the JSON file.
-            target_model_id: Identifier of the receiving model.
-            interaction_turn: Sequential turn in the interaction.
+            target_agent: Identifier of the receiving agent.
+            timecode: Time information for the message.
             context: String describing the interaction context.
             metadata: Optional additional information.
             indent: Number of spaces used for JSON indentation.
@@ -194,8 +201,8 @@ class BaseFormalModel(ABC):
         """
 
         message = self.to_message(
-            target_model_id=target_model_id,
-            interaction_turn=interaction_turn,
+            target_agent=target_agent,
+            timecode=timecode,
             context=context,
             metadata=metadata,
         )

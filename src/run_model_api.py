@@ -3,7 +3,7 @@ from __future__ import annotations
 import uvicorn
 
 from src.API.APISpecification import APISpecification
-from src.FormalModels.DummyFormalModel import DummyFormalModel
+from src.formalmodels.DummyFormalModel import DummyFormalModel
 
 
 def run_api() -> None:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 
-from src.FormalModels.BaseFormalModel import BaseFormalModel
+from src.formalmodels.BaseFormalModel import BaseFormalModel
 
 
 class DummyFormalModel(BaseFormalModel):
