@@ -1,23 +1,24 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from src.ITPSpecification import ITPSpecification
-from src.interactioncontext import InteractionContext
+from src.interactioncontext.InteractionContext import InteractionContext
 
 
 class Communication:
     """
     ITP communication session between named agents.
-    Note: The Communication class is agnostid regarding the ITP's message sender. This may be
-    - a local formal model agent
-    - a remote formal model agent
-    - a human user
 
-    Attributes:
-        specification: ITPSpecification (class attribute)
+    The Communication class is agnostic regarding the ITP message sender.
+    This may be a local formal model, a remote formal model, or a human user.
 
+    Args:
+
+    Returns:
     """
 
     specification = ITPSpecification()
@@ -86,20 +87,20 @@ class Communication:
 
     def make_message(
         self,
-        source_agent: str,
-        target_agent: str,
+        source_agent: dict[str, str],
+        target_agent: dict[str, str],
         timecode: dict[str, Any],
-        values: dict[str, float],
+        values: dict[str, Any],
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Create a numerical ITP message.
 
         Args:
-            source_agent: Identifier of the sending agent.
-            target_agent: Identifier of the receiving agent.
+            source_agent: Agent producing the message.
+            target_agent: Agent receiving the message.
             timecode: Time information for the message.
-            values: Numerical values carried by the message.
+            values: Values carried by the message.
             metadata: Optional additional information.
 
         Returns:
@@ -135,20 +136,20 @@ class Communication:
 
     def create_and_receive_message(
         self,
-        source_agent: str,
-        target_agent: str,
+        source_agent: dict[str, str],
+        target_agent: dict[str, str],
         timecode: dict[str, Any],
-        values: dict[str, float],
+        values: dict[str, Any],
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Create, validate, and store a numerical ITP message.
 
         Args:
-            source_agent: Identifier of the sending agent.
-            target_agent: Identifier of the receiving agent.
+            source_agent: Agent producing the message.
+            target_agent: Agent receiving the message.
             timecode: Time information for the message.
-            values: Numerical values carried by the message.
+            values: Values carried by the message.
             metadata: Optional additional information.
 
         Returns:
@@ -199,3 +200,60 @@ class Communication:
         """
 
         return deepcopy(self.messages)
+
+    def save_messages(
+        self,
+        root: str | Path = ".",
+    ) -> Path:
+        """
+        Save all stored ITP messages to a timestamped results folder.
+
+        Args:
+            root: Project root directory.
+
+        Returns:
+            Path to the directory containing the saved messages.
+        """
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = Path(root) / "results" / timestamp
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        for message_index, message in enumerate(self.messages, start=1):
+            file_name = self._make_message_file_name(
+                message=message,
+                message_index=message_index,
+            )
+
+            self.specification.save_json(
+                message=message,
+                path=output_dir / file_name,
+            )
+
+        return output_dir
+
+    def _make_message_file_name(
+        self,
+        message: dict[str, Any],
+        message_index: int,
+    ) -> str:
+        """
+        Create a file name for one stored ITP message.
+
+        Args:
+            message: Numerical ITP message.
+            message_index: Sequential message index.
+
+        Returns:
+            File name.
+        """
+
+        source_agent = message["source_agent"]["id"]
+        target_agent = message["target_agent"]["id"]
+        message_type = message.get("metadata", {}).get("message_type", "original")
+
+        return (
+            f"message_{message_index:03d}_"
+            f"{source_agent}_to_{target_agent}_"
+            f"{message_type}.json"
+        )

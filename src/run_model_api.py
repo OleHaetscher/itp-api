@@ -3,7 +3,7 @@ from __future__ import annotations
 import uvicorn
 
 from src.API.APISpecification import APISpecification
-from src.formalmodels.DummyFormalModel import DummyFormalModel
+from src.formalmodels.DummyFormalModels import DummySASBFormalModel
 
 
 def run_api() -> None:
@@ -15,7 +15,7 @@ def run_api() -> None:
     Returns:
     """
 
-    model = DummyFormalModel(
+    model = DummySASBFormalModel(
         model_id="model_a",
         random_seed=1,
     )

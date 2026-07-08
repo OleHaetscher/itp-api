@@ -18,15 +18,15 @@ class ITPSpecification:
 
     def __init__(
         self,
-        schema_version: str = "0.1",
-        allowed_dimensions: tuple[str, ...] = ("agency", "communion"),
+        schema_version: str = "0.2",
+        allowed_dimensions: tuple[str, ...] | None = None,
     ) -> None:
         """
         Initialize the ITP communication specification.
 
         Args:
             schema_version: Version of the message schema.
-            allowed_dimensions: Circumplex dimensions allowed in numerical messages.
+            allowed_dimensions: Optional dimensions allowed in numerical messages.
 
         Returns:
         """
@@ -36,20 +36,20 @@ class ITPSpecification:
 
     def make_message(
         self,
-        source_agent: str,
-        target_agent: str,
+        source_agent: dict[str, str],
+        target_agent: dict[str, str],
         timecode: dict[str, Any],
-        values: dict[str, float],
+        values: dict[str, Any],
         context: str,
-        metadata: dict[str, Any] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Create a valid numerical ITP message.
 
         Args:
-            source_agent: Identifier of the model producing the message.
-            target_agent: Identifier of the model receiving the message.
-            timecode: Sequential turn in the interaction.
+            source_agent: Agent producing the message.
+            target_agent: Agent receiving the message.
+            timecode: Time information for the message.
             values: Numerical values carried by the message.
             context: String describing the interaction context.
             metadata: Optional additional information.
@@ -60,9 +60,9 @@ class ITPSpecification:
 
         message = {
             "schema_version": self.schema_version,
-            "source_agent": source_agent,
-            "target_agent": target_agent,
-            "timecode": timecode,
+            "source_agent": deepcopy(source_agent),
+            "target_agent": deepcopy(target_agent),
+            "timecode": deepcopy(timecode),
             "values": deepcopy(values),
             "context": context,
         }
@@ -73,6 +73,54 @@ class ITPSpecification:
         self.validate_message(message)
 
         return message
+
+    def make_agent(
+        self,
+        agent_id: str,
+        state_space: str,
+        analysis_unit: str,
+    ) -> dict[str, str]:
+        """
+        Create an ITP agent description.
+
+        Args:
+            agent_id: Identifier of the agent.
+            state_space: State space used by the agent.
+            analysis_unit: Analysis unit used by the agent.
+
+        Returns:
+            ITP agent description.
+        """
+
+        return {
+            "id": agent_id,
+            "state_space": state_space,
+            "analysis_unit": analysis_unit,
+        }
+
+    def make_values(
+        self,
+        state_space: str,
+        analysis_unit: str,
+        data: dict[str, float],
+    ) -> dict[str, Any]:
+        """
+        Create an ITP values block.
+
+        Args:
+            state_space: State space used by the values.
+            analysis_unit: Analysis unit used by the values.
+            data: Numerical values.
+
+        Returns:
+            ITP values block.
+        """
+
+        return {
+            "state_space": state_space,
+            "analysis_unit": analysis_unit,
+            "data": deepcopy(data),
+        }
 
     def validate_message(
         self,
@@ -106,33 +154,13 @@ class ITPSpecification:
         if message["schema_version"] != self.schema_version:
             raise ValueError(f"Unsupported schema version: {message['schema_version']}")
 
-        if not isinstance(message["source_agent"], str):
-            raise TypeError("source_agent must be a string.")
-
-        if not isinstance(message["target_agent"], str):
-            raise TypeError("target_agent must be a string.")
-
-        if not isinstance(message["timecode"], dict):
-            raise TypeError("timecode must be a dictionary.")
-
-        if not message["timecode"]:
-            raise ValueError("timecode must not be empty.")
-
-        if not isinstance(message["values"], dict):
-            raise TypeError("values must be a dictionary.")
-
-        if not message["values"]:
-            raise ValueError("values must contain at least one numerical value.")
-
-        dimensions = allowed_dimensions or self.allowed_dimensions
-        unknown_dimensions = set(message["values"]) - set(dimensions)
-
-        if unknown_dimensions:
-            raise ValueError(f"Unknown or unsupported dimensions: {unknown_dimensions}")
-
-        for dimension, value in message["values"].items():
-            if isinstance(value, bool) or not isinstance(value, Real):
-                raise TypeError(f"Value for {dimension} must be numeric.")
+        self.validate_agent(message["source_agent"], "source_agent")
+        self.validate_agent(message["target_agent"], "target_agent")
+        self.validate_timecode(message["timecode"])
+        self.validate_values(
+            values=message["values"],
+            allowed_dimensions=allowed_dimensions,
+        )
 
         if not isinstance(message["context"], str):
             raise TypeError("context must be a string.")
@@ -145,7 +173,116 @@ class ITPSpecification:
 
         json.dumps(message)
 
-    def from_json(self, source: str | Path) -> dict[str, Any]:
+    def validate_agent(
+        self,
+        agent: dict[str, Any],
+        field_name: str,
+    ) -> None:
+        """
+        Validate an ITP agent description.
+
+        Args:
+            agent: Agent description.
+            field_name: Name of the message field containing the agent.
+
+        Returns:
+        """
+
+        if not isinstance(agent, dict):
+            raise TypeError(f"{field_name} must be a dictionary.")
+
+        required_keys = ("id", "state_space", "analysis_unit")
+        missing_keys = [key for key in required_keys if key not in agent]
+
+        if missing_keys:
+            raise ValueError(f"Missing {field_name} keys: {missing_keys}")
+
+        for key in required_keys:
+            if not isinstance(agent[key], str):
+                raise TypeError(f"{field_name}.{key} must be a string.")
+
+            if not agent[key]:
+                raise ValueError(f"{field_name}.{key} must not be empty.")
+
+    def validate_timecode(
+        self,
+        timecode: dict[str, Any],
+    ) -> None:
+        """
+        Validate an ITP timecode.
+
+        Args:
+            timecode: Time information for the message.
+
+        Returns:
+        """
+
+        if not isinstance(timecode, dict):
+            raise TypeError("timecode must be a dictionary.")
+
+        if not timecode:
+            raise ValueError("timecode must not be empty.")
+
+    def validate_values(
+        self,
+        values: dict[str, Any],
+        allowed_dimensions: tuple[str, ...] | None = None,
+    ) -> None:
+        """
+        Validate an ITP values block.
+
+        Args:
+            values: Values block.
+            allowed_dimensions: Optional allowed dimensions.
+
+        Returns:
+        """
+
+        if not isinstance(values, dict):
+            raise TypeError("values must be a dictionary.")
+
+        required_keys = ("state_space", "analysis_unit", "data")
+        missing_keys = [key for key in required_keys if key not in values]
+
+        if missing_keys:
+            raise ValueError(f"Missing values keys: {missing_keys}")
+
+        if not isinstance(values["state_space"], str):
+            raise TypeError("values.state_space must be a string.")
+
+        if not values["state_space"]:
+            raise ValueError("values.state_space must not be empty.")
+
+        if not isinstance(values["analysis_unit"], str):
+            raise TypeError("values.analysis_unit must be a string.")
+
+        if not values["analysis_unit"]:
+            raise ValueError("values.analysis_unit must not be empty.")
+
+        if not isinstance(values["data"], dict):
+            raise TypeError("values.data must be a dictionary.")
+
+        if not values["data"]:
+            raise ValueError("values.data must contain at least one numerical value.")
+
+        dimensions = allowed_dimensions or self.allowed_dimensions
+
+        if dimensions is not None:
+            unknown_dimensions = set(values["data"]) - set(dimensions)
+
+            if unknown_dimensions:
+                raise ValueError(
+                    f"Unknown or unsupported dimensions: {unknown_dimensions}"
+                )
+
+        for dimension, value in values["data"].items():
+            if isinstance(value, bool) or not isinstance(value, Real):
+                raise TypeError(f"Value for {dimension} must be numeric.")
+
+    def from_json(
+        self,
+        source: str | Path,
+    ) -> dict[str, Any]:
         """
         Load a numerical ITP message from a JSON string or JSON file.
 

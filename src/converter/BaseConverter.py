@@ -1,27 +1,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from typing import Any
 
 
 class BaseConverter(ABC):
     """
-    Base class for converters between different interpersonal formal models.
-
-    A converter translates a representation produced by one formal model into a
-    representation that another formal model, or a shared neutral representation,
-    can consume. Two kinds of conversion are anticipated:
-
-    1. Framework-level mapping: relating the dimensions of two interpersonal
-       frameworks (e.g. mapping affiliative approach and avoidance motives onto
-       the positive and negative pole of communion).
-    2. Model-level mapping: relating two whole formal models whose state spaces
-       differ in structure (e.g. mapping a monadic, per-agent representation onto
-       a dyadic, shared relational state space).
-
-    Subclasses implement the actual conversion in `convert`. The base class only
-    fixes the shared interface and light provenance, namely which framework or
-    model a converter maps from (`source`) and to (`target`).
+    Base class for converters between interpersonal state spaces.
 
     Args:
 
@@ -33,9 +19,6 @@ class BaseConverter(ABC):
         """
         Initialize the converter.
 
-        Subclasses are expected to set `source` and `target` to short strings
-        identifying the framework or model they convert from and to.
-
         Args:
 
         Returns:
@@ -46,21 +29,70 @@ class BaseConverter(ABC):
     @abstractmethod
     def convert(
         self,
-        source_input: Any,
+        source_input: dict[str, float],
         context: str | None = None,
-    ) -> Any:
+    ) -> dict[str, float]:
         """
-        Convert a source representation into the target representation. Must be implemented by the subclass.
+        Convert source values into target values.
 
         Args:
-            source_input: Representation produced by the source model.
+            source_input: Numerical values in the source state space.
             context: Optional string describing the interaction context.
 
         Returns:
-            Representation consumable by the target model.
+            Numerical values in the target state space.
         """
 
         pass
+
+    def convert_message(
+        self,
+        message: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Convert the values block of an ITP message.
+
+        Args:
+            message: Numerical ITP message.
+
+        Returns:
+            Numerical ITP message with converted values.
+        """
+
+        self.validate_converter_interface()
+
+        if message["values"]["state_space"] != self.source:
+            raise ValueError("Message values do not match converter source.")
+
+        if message["target_agent"]["state_space"] != self.target:
+            raise ValueError("Message target does not match converter target.")
+
+        if message["values"]["analysis_unit"] != message["target_agent"]["analysis_unit"]:
+            raise ValueError("Analysis unit conversion is not implemented yet.")
+
+        converted_message = deepcopy(message)
+
+        converted_message["values"]["state_space"] = self.target
+        converted_message["values"]["analysis_unit"] = message["target_agent"][
+            "analysis_unit"
+        ]
+        converted_message["values"]["data"] = self.convert(
+            source_input=message["values"]["data"],
+            context=message["context"],
+        )
+
+        metadata = converted_message.get("metadata", {})
+        metadata["message_type"] = "converted"
+        metadata["conversion"] = {
+            "converter": self.__class__.__name__,
+            "from_state_space": self.source,
+            "to_state_space": self.target,
+            "from_analysis_unit": message["values"]["analysis_unit"],
+            "to_analysis_unit": message["target_agent"]["analysis_unit"],
+        }
+        converted_message["metadata"] = metadata
+
+        return converted_message
 
     def describe(self) -> str:
         """
@@ -98,3 +130,9 @@ class BaseConverter(ABC):
 
         if not isinstance(self.target, str):
             raise TypeError("target must be a string.")
+
+        if not self.source:
+            raise ValueError("source must not be empty.")
+
+        if not self.target:
+            raise ValueError("target must not be empty.")

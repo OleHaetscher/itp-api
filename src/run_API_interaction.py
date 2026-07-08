@@ -4,33 +4,45 @@ from typing import Any
 
 from src.API.APIClient import APIClient
 from src.communication.Communication import Communication
-from src.formalmodels.DummyFormalModel import DummyFormalModel
+from src.formalmodels.BaseFormalModel import BaseFormalModel
+from src.formalmodels.DummyFormalModels import DummyIPCFormalModel
+from src.utils.utilfuncs import *
 
 
-def make_timecode(
-    interaction_turn: int,
-    message_index: int,
+def store_and_prepare_message(
+    communication: Communication,
+    message: dict[str, Any],
+    converter=None,
 ) -> dict[str, Any]:
     """
-    Create a timecode for an ITP message.
+    Store an original message and, if needed, store its converted version.
 
     Args:
-        interaction_turn: Sequential interaction turn.
-        message_index: Sequential message within the interaction turn.
+        communication: ITP communication session.
+        message: Numerical ITP message.
+        converter: Optional converter used to align message values.
 
     Returns:
-        Timecode.
+        Numerical ITP message ready for the target agent.
     """
 
-    return {
-        "timestamp": f"{interaction_turn}:{message_index:02d}",
-        "interaction_turn": interaction_turn,
-    }
+    communication.receive_message(message)
+
+    delivered_message = prepare_message_for_target(
+        message=message,
+        converter=converter,
+    )
+
+    if delivered_message is not message:
+        communication.receive_message(delivered_message)
+
+    return delivered_message
 
 
 def run_remote_interaction(
     n_interaction_turns: int = 10,
     context: str = "workplace_colleague_conversation",
+    converter=None,
 ) -> Communication:
     """
     Run an interaction between one local and one remote formal model.
@@ -38,6 +50,7 @@ def run_remote_interaction(
     Args:
         n_interaction_turns: Number of interaction turns.
         context: String describing the interaction context.
+        converter: Optional converter used to align message values.
 
     Returns:
         Communication session containing the exchanged ITP messages.
@@ -45,16 +58,19 @@ def run_remote_interaction(
 
     communication = Communication(context=context)
 
-    remote_model_a = APIClient("http://127.0.0.1:8001")
+    remote_model = APIClient("http://127.0.0.1:8001")
+    remote_agent = remote_model.get_info()["agent"]
 
-    model_b = DummyFormalModel(
+    local_model: BaseFormalModel = DummyIPCFormalModel(
         model_id="model_b",
         random_seed=2,
     )
 
+    local_agent = local_model.to_agent()
+
     for interaction_turn in range(1, n_interaction_turns + 1):
-        message_a = remote_model_a.generate_message(
-            target_agent="model_b",
+        remote_message = remote_model.generate_message(
+            target_agent=local_agent,
             timecode=make_timecode(
                 interaction_turn=interaction_turn,
                 message_index=1,
@@ -62,11 +78,16 @@ def run_remote_interaction(
             context=communication.context_name,
         )
 
-        communication.receive_message(message_a)
-        model_b.from_message(message_a)
+        remote_message_for_local = store_and_prepare_message(
+            communication=communication,
+            message=remote_message,
+            converter=converter,
+        )
 
-        message_b = model_b.to_message(
-            target_agent="model_a",
+        local_model.from_message(remote_message_for_local)
+
+        local_message = local_model.to_message(
+            target_agent=remote_agent,
             timecode=make_timecode(
                 interaction_turn=interaction_turn,
                 message_index=2,
@@ -74,20 +95,29 @@ def run_remote_interaction(
             context=communication.context_name,
         )
 
-        communication.receive_message(message_b)
+        local_message_for_remote = store_and_prepare_message(
+            communication=communication,
+            message=local_message,
+            converter=converter,
+        )
 
-        message_a_response = remote_model_a.step(message_b)
+        remote_response = remote_model.step(local_message_for_remote)
 
-        communication.receive_message(message_a_response)
-        model_b.from_message(message_a_response)
+        remote_response_for_local = store_and_prepare_message(
+            communication=communication,
+            message=remote_response,
+            converter=converter,
+        )
+
+        local_model.from_message(remote_response_for_local)
 
         print(f"\nInteraction turn {interaction_turn}")
-        print("Remote model A output:")
-        print(message_a)
-        print("Local model B output:")
-        print(message_b)
-        print("Remote model A response:")
-        print(message_a_response)
+        print("Remote model output:")
+        print(remote_message)
+        print("Local model output:")
+        print(local_message)
+        print("Remote model response:")
+        print(remote_response)
 
     return communication
 

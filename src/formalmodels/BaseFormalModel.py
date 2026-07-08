@@ -65,6 +65,26 @@ class BaseFormalModel(ABC):
 
         pass
 
+    def to_agent(
+        self,
+    ) -> dict[str, str]:
+        """
+        Create an ITP agent description for the model.
+
+        Args:
+
+        Returns:
+            ITP agent description.
+        """
+
+        self.validate_model_interface()
+
+        return self.specification.make_agent(
+            agent_id=self.model_id,
+            state_space=self.state_space,
+            analysis_unit=self.analysis_unit,
+        )
+
     def from_message(
         self,
         message: dict[str, Any],
@@ -85,14 +105,23 @@ class BaseFormalModel(ABC):
             allowed_dimensions=self.dimensions,
         )
 
+        if message["target_agent"]["id"] != self.model_id:
+            raise ValueError("Message does not target this model.")
+
+        if message["values"]["state_space"] != self.state_space:
+            raise ValueError("Message values do not match the model state space.")
+
+        if message["values"]["analysis_unit"] != self.analysis_unit:
+            raise ValueError("Message values do not match the model analysis unit.")
+
         self.integrate_numerical_input(
-            numerical_input=message["values"],
+            numerical_input=message["values"]["data"],
             context=message["context"],
         )
 
     def to_message(
         self,
-        target_agent: str,
+        target_agent: dict[str, str],
         timecode: dict[str, Any],
         context: str,
         metadata: dict[str, Any] | None = None,
@@ -101,7 +130,7 @@ class BaseFormalModel(ABC):
         Generate a numerical ITP message from the model.
 
         Args:
-            target_agent: Identifier of the receiving agent.
+            target_agent: Agent receiving the message.
             timecode: Time information for the message.
             context: String describing the interaction context.
             metadata: Optional additional information.
@@ -112,10 +141,16 @@ class BaseFormalModel(ABC):
 
         self.validate_model_interface()
 
-        values = self.generate_numerical_output(context=context)
+        numerical_output = self.generate_numerical_output(context=context)
+
+        values = self.specification.make_values(
+            state_space=self.state_space,
+            analysis_unit=self.analysis_unit,
+            data=numerical_output,
+        )
 
         message = self.specification.make_message(
-            source_agent=self.model_id,
+            source_agent=self.to_agent(),
             target_agent=target_agent,
             timecode=timecode,
             values=values,
@@ -148,7 +183,7 @@ class BaseFormalModel(ABC):
 
     def to_json(
         self,
-        target_agent: str,
+        target_agent: dict[str, str],
         timecode: dict[str, Any],
         context: str,
         metadata: dict[str, Any] | None = None,
@@ -158,7 +193,7 @@ class BaseFormalModel(ABC):
         Generate numerical output as a JSON message.
 
         Args:
-            target_agent: Identifier of the receiving agent.
+            target_agent: Agent receiving the message.
             timecode: Time information for the message.
             context: String describing the interaction context.
             metadata: Optional additional information.
@@ -180,7 +215,7 @@ class BaseFormalModel(ABC):
     def save_json(
         self,
         path: str | Path,
-        target_agent: str,
+        target_agent: dict[str, str],
         timecode: dict[str, Any],
         context: str,
         metadata: dict[str, Any] | None = None,
@@ -191,7 +226,7 @@ class BaseFormalModel(ABC):
 
         Args:
             path: Path to the JSON file.
-            target_agent: Identifier of the receiving agent.
+            target_agent: Agent receiving the message.
             timecode: Time information for the message.
             context: String describing the interaction context.
             metadata: Optional additional information.
@@ -222,7 +257,12 @@ class BaseFormalModel(ABC):
         Returns:
         """
 
-        required_attributes = ("model_id", "dimensions")
+        required_attributes = (
+            "model_id",
+            "state_space",
+            "analysis_unit",
+            "dimensions",
+        )
 
         for attribute in required_attributes:
             if not hasattr(self, attribute):
@@ -231,15 +271,27 @@ class BaseFormalModel(ABC):
         if not isinstance(self.model_id, str):
             raise TypeError("model_id must be a string.")
 
+        if not isinstance(self.state_space, str):
+            raise TypeError("state_space must be a string.")
+
+        if not isinstance(self.analysis_unit, str):
+            raise TypeError("analysis_unit must be a string.")
+
         if not isinstance(self.dimensions, tuple):
             raise TypeError("dimensions must be a tuple.")
+
+        if not self.model_id:
+            raise ValueError("model_id must not be empty.")
+
+        if not self.state_space:
+            raise ValueError("state_space must not be empty.")
+
+        if not self.analysis_unit:
+            raise ValueError("analysis_unit must not be empty.")
 
         if not self.dimensions:
             raise ValueError("dimensions must contain at least one dimension.")
 
-        unknown_dimensions = set(self.dimensions) - set(
-            self.specification.allowed_dimensions
-        )
-
-        if unknown_dimensions:
-            raise ValueError(f"Unknown model dimensions: {unknown_dimensions}")
+        for dimension in self.dimensions:
+            if not isinstance(dimension, str):
+                raise TypeError("All dimensions must be strings.")
