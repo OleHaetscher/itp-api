@@ -32,7 +32,9 @@ class APIClient:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 
-    def get_info(self) -> dict[str, Any]:
+    def get_info(
+        self,
+    ) -> dict[str, Any]:
         """
         Get information about the remote formal model.
 
@@ -44,9 +46,23 @@ class APIClient:
 
         return self._get("/info")
 
+    def get_agent(
+        self,
+    ) -> dict[str, str]:
+        """
+        Get the remote model agent description.
+
+        Args:
+
+        Returns:
+            Remote model agent description.
+        """
+
+        return self.get_info()["agent"]
+
     def generate_message(
         self,
-        target_agent: str,
+        target_agent: dict[str, str],
         timecode: dict[str, Any],
         context: str,
         metadata: dict[str, Any] | None = None,
@@ -55,7 +71,7 @@ class APIClient:
         Ask the remote model to generate an initial ITP message.
 
         Args:
-            target_agent: Identifier of the agent receiving the generated message.
+            target_agent: Agent receiving the generated message.
             timecode: Time information for the message.
             context: String describing the interaction context.
             metadata: Optional additional information.

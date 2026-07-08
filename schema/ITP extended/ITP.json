@@ -1,0 +1,26 @@
+{
+    "schema_version": "0.2",
+    "source_agent": {
+        "id": "model_sasb",
+        "state_space": "sasb_transitive",
+        "analysis_unit": "monadic"
+    },
+    "target_agent": {
+        "id": "model_ipc",
+        "state_space": "ipc",
+        "analysis_unit": "monadic"
+    },
+    "timecode": {
+        "timestamp": "0:00",
+        "interaction_turn": 1
+    },
+    "values": {
+        "state_space": "sasb_transitive",
+        "analysis_unit": "monadic",
+        "data": {
+            "Aff": 1,
+            "Int": -1
+        }
+    },
+    "context": "workplace_colleague_conversation"
+}

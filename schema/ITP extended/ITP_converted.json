@@ -1,0 +1,36 @@
+{
+    "schema_version": "0.2",
+    "source_agent": {
+        "id": "model_sasb",
+        "state_space": "sasb_transitive",
+        "analysis_unit": "monadic"
+    },
+    "target_agent": {
+        "id": "model_ipc",
+        "state_space": "ipc",
+        "analysis_unit": "monadic"
+    },
+    "timecode": {
+        "timestamp": "0:00",
+        "interaction_turn": 1
+    },
+    "values": {
+        "state_space": "ipc",
+        "analysis_unit": "monadic",
+        "data": {
+            "Theta": 45.0,
+            "R": 0.71
+        }
+    },
+    "context": "workplace_colleague_conversation",
+    "metadata": {
+        "message_type": "converted",
+        "conversion": {
+            "converter": "SASBToIPCConverter",
+            "from_state_space": "sasb_transitive",
+            "to_state_space": "ipc",
+            "from_analysis_unit": "monadic",
+            "to_analysis_unit": "monadic"
+        }
+    }
+}

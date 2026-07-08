@@ -23,7 +23,7 @@ class InteractionContext:
     def diamonds(self) -> dict[str, float]:
         """
         Return DIAMONDS values for the context.
-        # TODO: Automate this? In case new contexts are added?
+        # TODO: Automate this? Or add context registry as well?
 
         Args:
 

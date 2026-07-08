@@ -1,59 +1,41 @@
 from __future__ import annotations
 
-from src.communication.Communication import Communication
-from src.formalmodels.BaseFormalModel import BaseFormalModel
-from src.formalmodels.DummyFormalModel import DummyFormalModel
+from typing import Any
 
+from src.communication.Communication import Communication
+from src.converter.ConverterRegistry import make_default_converter_registry
+from src.formalmodels.BaseFormalModel import BaseFormalModel
+from src.formalmodels.DummyFormalModels import DummyIPCFormalModel, DummySASBFormalModel
+from src.utils.utilfuncs import *
 
 def instantiate_models(
-    model_a_seed: int | None = 1,
-    model_b_seed: int | None = 2,
+    model_ipc_seed: int | None = 1,
+    model_sasb_seed: int | None = 2,
 ) -> dict[str, BaseFormalModel]:
     """
     Instantiate the formal models used in the interaction.
 
     Args:
-        model_a_seed: Random seed used to initialize the first model.
-        model_b_seed: Random seed used to initialize the second model.
+        model_ipc_seed: Random seed used to initialize the IPC model.
+        model_sasb_seed: Random seed used to initialize the SASB model.
 
     Returns:
         Dictionary mapping agent identifiers to instantiated formal models.
     """
 
-    model_a = DummyFormalModel(
-        model_id="model_a",
-        random_seed=model_a_seed,
+    model_ipc = DummyIPCFormalModel(
+        model_id="model_ipc",
+        random_seed=model_ipc_seed,
     )
 
-    model_b = DummyFormalModel(
-        model_id="model_b",
-        random_seed=model_b_seed,
+    model_sasb = DummySASBFormalModel(
+        model_id="model_sasb",
+        random_seed=model_sasb_seed,
     )
 
     return {
-        "model_a": model_a,
-        "model_b": model_b,
-    }
-
-
-def make_timecode(
-    interaction_turn: int,
-    message_index: int,
-) -> dict[str, int | str]:
-    """
-    Create a timecode for an ITP message.
-
-    Args:
-        interaction_turn: Sequential interaction turn.
-        message_index: Sequential message within the interaction turn.
-
-    Returns:
-        Timecode.
-    """
-
-    return {
-        "timestamp": f"{interaction_turn}:{message_index:02d}",
-        "interaction_turn": interaction_turn,
+        model_ipc.model_id: model_ipc,
+        model_sasb.model_id: model_sasb,
     }
 
 
@@ -62,8 +44,9 @@ def exchange_message(
     models: dict[str, BaseFormalModel],
     source_agent: str,
     target_agent: str,
-    timecode: dict[str, int | str],
-) -> dict:
+    timecode: dict[str, Any],
+    converter=None,
+) -> dict[str, Any]:
     """
     Exchange one ITP message between two formal models.
 
@@ -73,29 +56,66 @@ def exchange_message(
         source_agent: Identifier of the sending agent.
         target_agent: Identifier of the receiving agent.
         timecode: Time information for the message.
+        converter: Optional converter used to align message values.
 
     Returns:
-        Numerical ITP message.
+        Numerical ITP message delivered to the target model.
     """
 
-    message = models[source_agent].to_message(
-        target_agent=target_agent,
+    original_message = models[source_agent].to_message(
+        target_agent=models[target_agent].to_agent(),
         timecode=timecode,
         context=communication.context_name,
     )
 
-    communication.receive_message(message)
-    models[target_agent].from_message(message)
+    communication.receive_message(original_message)
 
-    return message
+    delivered_message = prepare_message_for_target(
+        message=original_message,
+        converter=converter,
+    )
+
+    if delivered_message is not original_message:
+        communication.receive_message(delivered_message)
+
+    models[target_agent].from_message(delivered_message)
+
+    return delivered_message
+
+
+def get_second_agent(
+    models: dict[str, BaseFormalModel],
+    first_agent: str,
+) -> str:
+    """
+    Return the second agent in a two-agent interaction.
+
+    Args:
+        models: Dictionary mapping agent identifiers to formal models.
+        first_agent: Identifier of the first agent.
+
+    Returns:
+        Identifier of the second agent.
+    """
+
+    agent_ids = list(models)
+
+    if first_agent not in models:
+        raise ValueError(f"Unknown first agent: {first_agent}")
+
+    if len(agent_ids) != 2:
+        raise ValueError("This runner currently expects exactly two models.")
+
+    return next(agent_id for agent_id in agent_ids if agent_id != first_agent)
 
 
 def run_interaction(
     models: dict[str, BaseFormalModel],
     n_interaction_turns: int = 10,
-    first_agent: str = "model_a",
+    first_agent: str = "model_sasb",
     context: str = "workplace_colleague_conversation",
     verbose: bool = True,
+    converter=None,
 ) -> Communication:
     """
     Run a sequential ITP interaction between two formal models.
@@ -106,13 +126,16 @@ def run_interaction(
         first_agent: Agent that sends the first message in each interaction turn.
         context: String describing the interaction context.
         verbose: Whether to print the exchanged messages.
+        converter: Optional converter used to align message values.
 
     Returns:
         Communication session containing the exchanged ITP messages.
     """
 
-    agent_ids = list(models)
-    second_agent = next(agent_id for agent_id in agent_ids if agent_id != first_agent)
+    second_agent = get_second_agent(
+        models=models,
+        first_agent=first_agent,
+    )
 
     communication = Communication(context=context)
 
@@ -126,6 +149,7 @@ def run_interaction(
                 interaction_turn=interaction_turn,
                 message_index=1,
             ),
+            converter=converter,
         )
 
         second_message = exchange_message(
@@ -137,6 +161,7 @@ def run_interaction(
                 interaction_turn=interaction_turn,
                 message_index=2,
             ),
+            converter=converter,
         )
 
         if verbose:
@@ -149,14 +174,20 @@ def run_interaction(
 
 if __name__ == "__main__":
     models = instantiate_models(
-        model_a_seed=1,
-        model_b_seed=2,
+        model_ipc_seed=1,
+        model_sasb_seed=2,
     )
+
+    converter = make_default_converter_registry()
 
     communication = run_interaction(
         models=models,
         n_interaction_turns=10,
-        first_agent="model_a",
+        first_agent="model_sasb",
         context="workplace_colleague_conversation",
         verbose=True,
+        converter=converter,
     )
+
+    output_dir = communication.save_messages(root=".")
+    print(output_dir)
