@@ -8,26 +8,28 @@ Reference implementation of the **Interpersonal Transaction Protocol (ITP)** —
 
 Three layers, deliberately decoupled:
 
-1. **Formal models** (`src/formalmodels/`) — produce and integrate numerical ITP values. `BaseFormalModel` is the abstract base; `DummyFormalModel` is the reference stub.
-2. **ITP messages** — standardized dicts (source, target, timecode, values, context). Spec/validation lives in `src/ITPSpecification.py`.
-3. **Communication sessions** (`src/communication/Communication.py`) — a stateful ITP message session that stores and validates messages. It does **not** hold model objects, so it also works with external-only messages.
+1. **Formal models** (`src/formalmodels/`) — produce and integrate numerical ITP values. `BaseFormalModel` is the abstract base; `DummyFormalModels.py` holds `DummyIPCFormalModel` / `DummySASBFormalModel`; `LASSIFormalModel.py` is the agency-communion (`ac`) model.
+2. **ITP messages** — nested dicts: `source_agent`/`target_agent` = `{id, state_space, analysis_unit}`, `values` = `{state_space, analysis_unit, data}`, plus `schema_version`, `timecode`, `context`, optional `metadata`. Spec/validation lives in `src/ITPSpecification.py` (`schema_version = "0.2"`).
+3. **Communication sessions** (`src/communication/Communication.py`) — a stateful ITP message session that stores and validates messages (original and converted). It does **not** hold model objects, clients, or users.
 
-Other modules: `src/API/` (FastAPI wrapper + client for remote models), `src/paradigms/` and `src/converter/` and `src/interactioncontext/` (mostly not yet implemented). `src/deprecated/` is dead code. `schema/` holds JSON Schemas for state spaces and ITP; `configs/interaction_contexts.yaml` holds context config.
+Cross-state-space delivery: the **runner** converts a message's `values` to the target's state space before delivery, using `src/converter/` (`BaseConverter`, `ConverterRegistry`, `StateSpaceConverters`). Converters live outside `Communication`. Geometry constraints are not enforced yet.
+
+Other modules: `src/API/` (FastAPI wrapper + client for remote models), `src/interactioncontext/`, `src/utils/utilfuncs.py` (timecode + conversion helpers). `src/deprecated/` is dead code. `schema/` holds JSON Schemas and example ITP messages; `configs/interaction_contexts.yaml` holds context config.
 
 ## Setup & run
 
-Run everything from the **repo root** (imports are `from src....`).
+Run everything from the **repo root as modules** (imports are `from src....`, and there are no `__init__.py` files, so `python src/foo.py` fails — use `-m`).
 
 ```bash
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 
 # local interaction between two dummy models
-python src/run_local_interaction.py
+python -m src.run_local_interaction
 
 # API-based interaction (two terminals)
-python src/run_model_api.py        # serves a model at http://127.0.0.1:8001
-python src/run_API_interaction.py  # client talks to it
+python -m src.run_model_api        # serves a model at http://127.0.0.1:8001
+python -m src.run_API_interaction  # client talks to it
 ```
 
 ## Conventions

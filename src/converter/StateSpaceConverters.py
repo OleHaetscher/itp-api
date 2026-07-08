@@ -4,6 +4,10 @@ import math
 
 from src.converter.BaseConverter import BaseConverter
 
+# NOTE: These converters map values numerically between state spaces but do NOT
+# enforce geometry constraints (e.g. valid regions, radius bounds, or lattice
+# structure of the target space). Geometry constraints are not implemented yet.
+
 
 def _clip(
     value: float,

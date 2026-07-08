@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ITP Communication Flow</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+  </style>
+<style>
+  :root {
+    --bg: #F1F3F6;
+    --surface: #FFFFFF;
+    --surface-2: #E9ECF1;
+    --ink: #171B21;
+    --muted: #5B646F;
+    --line: #D8DDE4;
+    --c-model: #0B6E75;
+    --c-store: #33489F;
+    --c-convert: #9C5600;
+    --c-api: #7A3E8F;
+    --c-spec: #4A5561;
+    --shadow: 0 1px 2px rgba(16,20,26,.06), 0 4px 14px rgba(16,20,26,.05);
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0E1116;
+      --surface: #161A20;
+      --surface-2: #1D232B;
+      --ink: #E9ECF0;
+      --muted: #98A2AD;
+      --line: #29313A;
+      --c-model: #2FB7C0;
+      --c-store: #7F95F2;
+      --c-convert: #E0982E;
+      --c-api: #C88FD9;
+      --c-spec: #9BA7B3;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #F1F3F6; --surface: #FFFFFF; --surface-2: #E9ECF1;
+    --ink: #171B21; --muted: #5B646F; --line: #D8DDE4;
+    --c-model: #0B6E75; --c-store: #33489F; --c-convert: #9C5600;
+    --c-api: #7A3E8F; --c-spec: #4A5561;
+    --shadow: 0 1px 2px rgba(16,20,26,.06), 0 4px 14px rgba(16,20,26,.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1116; --surface: #161A20; --surface-2: #1D232B;
+    --ink: #E9ECF0; --muted: #98A2AD; --line: #29313A;
+    --c-model: #2FB7C0; --c-store: #7F95F2; --c-convert: #E0982E;
+    --c-api: #C88FD9; --c-spec: #9BA7B3;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+
+  .page {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    padding: clamp(1.5rem, 4vw, 3.5rem) clamp(1rem, 4vw, 2rem);
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1140px; margin: 0 auto; }
+
+  /* ---- header ---- */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: .72rem;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--c-model);
+    margin: 0 0 .7rem;
+  }
+  h1 {
+    font-size: clamp(1.7rem, 3.6vw, 2.6rem);
+    line-height: 1.08;
+    letter-spacing: -.02em;
+    font-weight: 720;
+    margin: 0 0 .6rem;
+    text-wrap: balance;
+  }
+  .lede {
+    max-width: 62ch;
+    color: var(--muted);
+    font-size: 1.02rem;
+    margin: 0;
+  }
+
+  h2 {
+    font-size: 1.02rem;
+    letter-spacing: -.01em;
+    font-weight: 680;
+    margin: 0;
+    display: flex;
+    align-items: baseline;
+    gap: .6rem;
+  }
+  h2 .idx {
+    font-family: var(--mono);
+    font-size: .78rem;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .section { margin-top: clamp(2.2rem, 5vw, 3.4rem); }
+  .section > p.note {
+    color: var(--muted);
+    font-size: .92rem;
+    margin: .5rem 0 0;
+    max-width: 70ch;
+  }
+
+  hr.rule { border: 0; border-top: 1px solid var(--line); margin: 2.6rem 0 0; }
+
+  /* ---- legend ---- */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: .5rem .9rem;
+    margin-top: 1.1rem;
+  }
+  .legend .item {
+    display: inline-flex; align-items: center; gap: .45rem;
+    font-family: var(--mono); font-size: .72rem;
+    letter-spacing: .04em; color: var(--muted);
+  }
+  .dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+
+  /* ---- inventory grid ---- */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(255px, 1fr));
+    gap: 1rem;
+    margin-top: 1.3rem;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 1.05rem 1.1rem 1.15rem;
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: .55rem;
+  }
+  .chip {
+    align-self: flex-start;
+    font-family: var(--mono);
+    font-size: .64rem;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    padding: .26rem .5rem;
+    border-radius: 5px;
+    line-height: 1;
+  }
+  .card .file {
+    font-family: var(--mono);
+    font-size: .72rem;
+    color: var(--muted);
+    margin: -.1rem 0 .2rem;
+  }
+  .cls { font-family: var(--mono); font-weight: 600; font-size: .9rem; }
+  .card ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .5rem; }
+  .card li { display: flex; flex-direction: column; gap: .12rem; }
+  .card li .m { font-family: var(--mono); font-size: .8rem; color: var(--ink); }
+  .card li .d { font-size: .82rem; color: var(--muted); line-height: 1.4; }
+
+  /* role color helpers */
+  .r-model  { color: var(--c-model); }
+  .r-store  { color: var(--c-store); }
+  .r-convert{ color: var(--c-convert); }
+  .r-api    { color: var(--c-api); }
+  .r-spec   { color: var(--c-spec); }
+  .chip.model  { color: var(--c-model);  background: color-mix(in srgb, var(--c-model) 15%, var(--surface)); }
+  .chip.store  { color: var(--c-store);  background: color-mix(in srgb, var(--c-store) 15%, var(--surface)); }
+  .chip.convert{ color: var(--c-convert);background: color-mix(in srgb, var(--c-convert) 16%, var(--surface)); }
+  .chip.api    { color: var(--c-api);    background: color-mix(in srgb, var(--c-api) 15%, var(--surface)); }
+  .chip.spec   { color: var(--c-spec);   background: color-mix(in srgb, var(--c-spec) 14%, var(--surface)); }
+  .dot.model{ background: var(--c-model);} .dot.store{ background: var(--c-store);}
+  .dot.convert{ background: var(--c-convert);} .dot.api{ background: var(--c-api);}
+  .dot.spec{ background: var(--c-spec);}
+
+  /* ---- flow ---- */
+  .flows {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.6rem;
+    margin-top: 1.4rem;
+    align-items: start;
+  }
+  .flow {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1.3rem 1.25rem 1.5rem;
+    box-shadow: var(--shadow);
+  }
+  .flow h3 {
+    margin: 0 0 .2rem;
+    font-size: 1rem;
+    letter-spacing: -.01em;
+  }
+  .flow .sub {
+    font-family: var(--mono);
+    font-size: .72rem;
+    color: var(--muted);
+    margin: 0 0 1.1rem;
+  }
+  .lane { display: flex; flex-direction: column; align-items: stretch; }
+
+  .node {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    padding: .7rem .8rem .75rem;
+    display: flex; flex-direction: column; gap: .3rem;
+  }
+  .node.tint-model  { background: color-mix(in srgb, var(--c-model) 8%, var(--surface)); border-color: color-mix(in srgb, var(--c-model) 30%, var(--line)); }
+  .node.tint-store  { background: color-mix(in srgb, var(--c-store) 8%, var(--surface)); border-color: color-mix(in srgb, var(--c-store) 30%, var(--line)); }
+  .node.tint-convert{ background: color-mix(in srgb, var(--c-convert) 9%, var(--surface)); border-color: color-mix(in srgb, var(--c-convert) 34%, var(--line)); }
+  .node.tint-api    { background: color-mix(in srgb, var(--c-api) 8%, var(--surface)); border-color: color-mix(in srgb, var(--c-api) 30%, var(--line)); }
+  .node.tint-spec   { background: var(--surface-2); }
+
+  .node .head {
+    display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+  }
+  .node .actor {
+    font-family: var(--mono);
+    font-size: .6rem; font-weight: 600;
+    letter-spacing: .1em; text-transform: uppercase;
+  }
+  .node .call { font-family: var(--mono); font-size: .82rem; font-weight: 600; color: var(--ink); }
+  .node .desc { font-size: .8rem; color: var(--muted); line-height: 1.45; }
+  .node.cond .actor::after { content: " · conditional"; color: var(--muted); font-weight: 500; }
+
+  .conn {
+    display: flex; flex-direction: column; align-items: center;
+    padding: .1rem 0; gap: .12rem;
+  }
+  .conn .lbl {
+    font-family: var(--mono); font-size: .66rem; color: var(--muted);
+    letter-spacing: .02em; text-align: center; max-width: 90%;
+  }
+  .conn .bar { width: 2px; height: 9px; background: var(--line); }
+  .conn .tip { font-size: .74rem; color: var(--muted); line-height: .6; margin-top: -2px; }
+
+  .msg-token {
+    border: 1px dashed color-mix(in srgb, var(--c-spec) 45%, var(--line));
+    border-radius: 10px;
+    background: var(--surface-2);
+    padding: .65rem .8rem;
+    font-family: var(--mono);
+    font-size: .7rem;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .msg-token b { color: var(--ink); font-weight: 600; }
+
+  .flow .foot {
+    margin-top: 1.1rem;
+    padding-top: .9rem;
+    border-top: 1px solid var(--line);
+    font-size: .8rem;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .flow .foot .m { font-family: var(--mono); color: var(--ink); }
+
+  .callouts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-top: 1.3rem; }
+  .callout { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.05rem; box-shadow: var(--shadow); }
+  .callout h4 { margin: 0 0 .4rem; font-size: .82rem; font-family: var(--mono); letter-spacing: .03em; }
+  .callout p { margin: 0; font-size: .84rem; color: var(--muted); line-height: 1.5; }
+  .callout code { font-family: var(--mono); font-size: .78rem; color: var(--ink); background: var(--surface-2); padding: .05rem .3rem; border-radius: 4px; }
+
+  footer.foot-note {
+    margin-top: 2.6rem;
+    font-family: var(--mono);
+    font-size: .7rem;
+    color: var(--muted);
+    letter-spacing: .02em;
+  }
+
+  @media (max-width: 760px) {
+    .flows { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="page">
+  <div class="wrap">
+
+    <header>
+      <p class="eyebrow">Interpersonal Transaction Protocol · schema v0.2</p>
+      <h1>How one ITP communication flows through the codebase</h1>
+      <p class="lede">A single interaction is a sequence of nested ITP messages passing between formal models. Every message is produced, validated, stored, converted when state spaces differ, and integrated — never mutated in place. This maps each step to the class and method that performs it.</p>
+
+      <div class="legend" aria-label="Role colors">
+        <span class="item"><span class="dot spec"></span>Protocol / helpers</span>
+        <span class="item"><span class="dot model"></span>Formal model</span>
+        <span class="item"><span class="dot store"></span>Communication session</span>
+        <span class="item"><span class="dot convert"></span>Converter</span>
+        <span class="item"><span class="dot api"></span>API transport</span>
+      </div>
+    </header>
+
+    <hr class="rule" />
+
+    <!-- ============ COMPONENT INVENTORY ============ -->
+    <section class="section">
+      <h2><span class="idx">01</span> Main elements</h2>
+      <p class="note">Every non-deprecated participant, grouped by module. Method names are the ones that carry a message.</p>
+
+      <div class="grid">
+
+        <div class="card">
+          <span class="chip spec">Protocol</span>
+          <span class="cls r-spec">ITPSpecification</span>
+          <span class="file">src/ITPSpecification.py</span>
+          <ul>
+            <li><span class="m">make_agent / make_values / make_message</span><span class="d">Assemble the nested message parts.</span></li>
+            <li><span class="m">validate_message</span><span class="d">Enforce schema 0.2 on agents, values, timecode, context.</span></li>
+            <li><span class="m">from_json / to_json / save_json</span><span class="d">Serialize and reload messages.</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="chip store">Session</span>
+          <span class="cls r-store">Communication</span>
+          <span class="file">src/communication/Communication.py</span>
+          <ul>
+            <li><span class="m">receive_message</span><span class="d">Validate + store a deep copy. Original and converted both land here.</span></li>
+            <li><span class="m">create_and_receive_message</span><span class="d">Build via spec, then store.</span></li>
+            <li><span class="m">save_messages</span><span class="d">Write all messages to results/&lt;timestamp&gt;/.</span></li>
+            <li><span class="m">messages · last_message · n_messages</span><span class="d">Read-only session state. No models held.</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="chip model">Model</span>
+          <span class="cls r-model">BaseFormalModel</span>
+          <span class="file">src/formalmodels/BaseFormalModel.py</span>
+          <ul>
+            <li><span class="m">to_agent</span><span class="d">Describe self as {id, state_space, analysis_unit}.</span></li>
+            <li><span class="m">to_message</span><span class="d">generate_numerical_output() → nested message.</span></li>
+            <li><span class="m">from_message</span><span class="d">Check target + spaces, integrate values["data"].</span></li>
+            <li><span class="m">integrate_ / generate_numerical_*</span><span class="d">Abstract hooks each subclass implements.</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="chip model">Models</span>
+          <span class="cls r-model">Dummy &amp; LASSI models</span>
+          <span class="file">DummyFormalModels.py · LASSIFormalModel.py</span>
+          <ul>
+            <li><span class="m">DummyIPCFormalModel</span><span class="d">space "ipc", dims Theta · R.</span></li>
+            <li><span class="m">DummySASBFormalModel</span><span class="d">space "sasb", dims Aff · Int.</span></li>
+            <li><span class="m">LASSIFormalModel (+ LASSIAxis)</span><span class="d">space "ac", dims A · C; internal 0–4 grid, ITP I/O on 1–5.</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="chip convert">Converter</span>
+          <span class="cls r-convert">BaseConverter</span>
+          <span class="file">src/converter/BaseConverter.py</span>
+          <ul>
+            <li><span class="m">convert</span><span class="d">Map values.data only (source → target space).</span></li>
+            <li><span class="m">convert_message</span><span class="d">Rewrite values, tag metadata.message_type = converted.</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="chip convert">Converter</span>
+          <span class="cls r-convert">ConverterRegistry</span>
+          <span class="file">ConverterRegistry.py · StateSpaceConverters.py</span>
+          <ul>
+            <li><span class="m">register / get_converter</span><span class="d">Look up by (source, target); missing → error.</span></li>
+            <li><span class="m">needs_conversion / convert_message</span><span class="d">Decide and dispatch.</span></li>
+            <li><span class="m">AC↔IPC · SASB↔IPC</span><span class="d">Four registered converters. Geometry not enforced yet.</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="chip api">API</span>
+          <span class="cls r-api">APIClient</span>
+          <span class="file">src/API/APIClient.py</span>
+          <ul>
+            <li><span class="m">get_info / get_agent</span><span class="d">GET /info → remote agent description.</span></li>
+            <li><span class="m">generate_message</span><span class="d">POST /generate with target_agent as a dict.</span></li>
+            <li><span class="m">step</span><span class="d">POST /step with a full ITP message.</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="chip api">API</span>
+          <span class="cls r-api">APISpecification</span>
+          <span class="file">src/API/APISpecification.py</span>
+          <ul>
+            <li><span class="m">GET /info</span><span class="d">{agent, dimensions, schema_version}.</span></li>
+            <li><span class="m">POST /generate</span><span class="d">model.to_message() with no incoming message.</span></li>
+            <li><span class="m">POST /step</span><span class="d">Validate target id → from_message → to_message.</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="chip spec">Helpers</span>
+          <span class="cls r-spec">utils.utilfuncs</span>
+          <span class="file">src/utils/utilfuncs.py</span>
+          <ul>
+            <li><span class="m">make_timecode</span><span class="d">Build {timestamp, interaction_turn}.</span></li>
+            <li><span class="m">needs_conversion</span><span class="d">Compare values vs target state_space / analysis_unit.</span></li>
+            <li><span class="m">prepare_message_for_target</span><span class="d">Convert if needed, else pass through.</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="chip spec">Context</span>
+          <span class="cls r-spec">InteractionContext</span>
+          <span class="file">src/interactioncontext/InteractionContext.py</span>
+          <ul>
+            <li><span class="m">from_config / from_config_entry</span><span class="d">Load contexts from YAML config.</span></li>
+            <li><span class="m">context_name · diamonds</span><span class="d">Name carried on every message; DIAMONDS attributes.</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="chip spec">Runners</span>
+          <span class="cls r-spec">Entry points</span>
+          <span class="file">src/run_*.py</span>
+          <ul>
+            <li><span class="m">run_local_interaction</span><span class="d">Two local models exchange N turns.</span></li>
+            <li><span class="m">run_model_api</span><span class="d">Serve one model over FastAPI (port 8001).</span></li>
+            <li><span class="m">run_API_interaction</span><span class="d">Local model talks to a remote one.</span></li>
+          </ul>
+        </div>
+
+      </div>
+    </section>
+
+    <hr class="rule" />
+
+    <!-- ============ THE MESSAGE ============ -->
+    <section class="section">
+      <h2><span class="idx">02</span> What flows — the ITP message (v0.2)</h2>
+      <p class="note">The single object passed between every participant. Only <span class="r-spec" style="font-family:var(--mono)">values.data</span> is integrated by a receiving model; everything else is routing and provenance.</p>
+      <div class="msg-token" style="margin-top:1.1rem;">
+        {<br>
+        &nbsp;&nbsp;<b>schema_version</b>: "0.2",<br>
+        &nbsp;&nbsp;<b>source_agent</b>: { id, state_space, analysis_unit },<br>
+        &nbsp;&nbsp;<b>target_agent</b>: { id, state_space, analysis_unit },<br>
+        &nbsp;&nbsp;<b>timecode</b>: { timestamp, interaction_turn },<br>
+        &nbsp;&nbsp;<b>values</b>: { state_space, analysis_unit, <b>data</b>: { dim: number } },<br>
+        &nbsp;&nbsp;<b>context</b>: "workplace_colleague_conversation",<br>
+        &nbsp;&nbsp;<b>metadata</b>?: { message_type, conversion }<br>
+        }
+      </div>
+    </section>
+
+    <hr class="rule" />
+
+    <!-- ============ FLOWS ============ -->
+    <section class="section">
+      <h2><span class="idx">03</span> The two communication flows</h2>
+      <p class="note">Read each column top to bottom — it is one message crossing from a source to a target. The reply repeats it with the roles swapped, and the runner loops for N turns.</p>
+
+      <div class="flows">
+
+        <!-- LOCAL -->
+        <div class="flow">
+          <h3>Local interaction</h3>
+          <p class="sub">run_local_interaction.py — two in-process models</p>
+          <div class="lane">
+
+            <div class="node tint-model">
+              <div class="head"><span class="actor r-model">Source model</span></div>
+              <span class="call">source.to_message(target_agent, timecode, context)</span>
+              <span class="desc">Calls generate_numerical_output(), wraps it with make_values() / make_agent() / make_message().</span>
+            </div>
+            <div class="conn"><span class="lbl">returns original message</span><span class="bar"></span><span class="tip">▼</span></div>
+
+            <div class="node tint-store">
+              <div class="head"><span class="actor r-store">Communication</span></div>
+              <span class="call">receive_message(original)</span>
+              <span class="desc">Validates via ITPSpecification, stores a deep copy — message_type: original.</span>
+            </div>
+            <div class="conn"><span class="lbl">prepare_message_for_target() · needs_conversion?</span><span class="bar"></span><span class="tip">▼</span></div>
+
+            <div class="node tint-convert cond">
+              <div class="head"><span class="actor r-convert">ConverterRegistry</span></div>
+              <span class="call">convert_message(original)</span>
+              <span class="desc">Only when values.state_space ≠ target.state_space. Picks e.g. SASBToIPCConverter, rewrites values.data, tags metadata. Missing mapping raises. If spaces match, this step is skipped.</span>
+            </div>
+            <div class="conn"><span class="lbl">receive_message() · store converted</span><span class="bar"></span><span class="tip">▼</span></div>
+
+            <div class="node tint-store">
+              <div class="head"><span class="actor r-store">Communication</span></div>
+              <span class="call">receive_message(converted)</span>
+              <span class="desc">Converted copy stored alongside the original — full provenance kept.</span>
+            </div>
+            <div class="conn"><span class="lbl">deliver</span><span class="bar"></span><span class="tip">▼</span></div>
+
+            <div class="node tint-model">
+              <div class="head"><span class="actor r-model">Target model</span></div>
+              <span class="call">target.from_message(delivered)</span>
+              <span class="desc">Checks target id + state_space + analysis_unit, then integrate_numerical_input(values["data"]).</span>
+            </div>
+
+          </div>
+          <p class="foot">Then roles swap for the reply. After all turns, <span class="m">communication.save_messages()</span> writes every original and converted message to <span class="m">results/&lt;timestamp&gt;/</span>.</p>
+        </div>
+
+        <!-- API -->
+        <div class="flow">
+          <h3>API remote interaction</h3>
+          <p class="sub">run_API_interaction.py + run_model_api.py — across processes</p>
+          <div class="lane">
+
+            <div class="node tint-api">
+              <div class="head"><span class="actor r-api">APIClient → APISpecification</span></div>
+              <span class="call">get_info() · GET /info</span>
+              <span class="desc">Remote returns {agent, dimensions, schema_version}; agent = remote.to_agent().</span>
+            </div>
+            <div class="conn"><span class="lbl">POST /generate (target_agent as dict)</span><span class="bar"></span><span class="tip">▼</span></div>
+
+            <div class="node tint-api">
+              <div class="head"><span class="actor r-api">APISpecification</span></div>
+              <span class="call">generate_message() → remote.to_message()</span>
+              <span class="desc">Remote model produces a nested ITP message and returns it over HTTP.</span>
+            </div>
+            <div class="conn"><span class="lbl">receive_message() + prepare_message_for_target()</span><span class="bar"></span><span class="tip">▼</span></div>
+
+            <div class="node tint-store">
+              <div class="head"><span class="actor r-store">Communication + ConverterRegistry</span></div>
+              <span class="call">store original → convert if needed → store converted</span>
+              <span class="desc">Same store-both-copies rule as the local flow; conversion is conditional on state space.</span>
+            </div>
+            <div class="conn"><span class="lbl">from_message()</span><span class="bar"></span><span class="tip">▼</span></div>
+
+            <div class="node tint-model">
+              <div class="head"><span class="actor r-model">Local model</span></div>
+              <span class="call">local.from_message() → local.to_message()</span>
+              <span class="desc">Integrates values["data"], then generates its own reply message.</span>
+            </div>
+            <div class="conn"><span class="lbl">step(message) · POST /step</span><span class="bar"></span><span class="tip">▼</span></div>
+
+            <div class="node tint-api">
+              <div class="head"><span class="actor r-api">APISpecification</span></div>
+              <span class="call">step() — validate target_agent.id</span>
+              <span class="desc">Rejects mismatched target, then remote.from_message() → remote.to_message() as the response (looped back into the store above).</span>
+            </div>
+
+          </div>
+          <p class="foot">The <span class="m">Communication</span> session lives on the client side and records every message that crosses the wire, original and converted.</p>
+        </div>
+
+      </div>
+    </section>
+
+    <hr class="rule" />
+
+    <!-- ============ INVARIANTS ============ -->
+    <section class="section">
+      <h2><span class="idx">04</span> Rules the flow keeps</h2>
+      <div class="callouts">
+        <div class="callout">
+          <h4 class="r-store">Communication stays pure</h4>
+          <p>It validates and stores messages only — never holds a model, client, or user. Orchestration lives in the runners.</p>
+        </div>
+        <div class="callout">
+          <h4 class="r-convert">Conversion is external &amp; conditional</h4>
+          <p>Applied by <code>prepare_message_for_target</code>, not by the session or the model. Skipped when source and target share a state space.</p>
+        </div>
+        <div class="callout">
+          <h4 class="r-model">Models integrate data only</h4>
+          <p><code>from_message</code> reads <code>values["data"]</code> and rejects any message whose target id or state space does not match.</p>
+        </div>
+        <div class="callout">
+          <h4 class="r-spec">Provenance is preserved</h4>
+          <p>Both the original and the converted message are stored, and conversions record their converter in <code>metadata</code>.</p>
+        </div>
+      </div>
+    </section>
+
+    <footer class="foot-note">ITP reference implementation · communication flow · deprecated module omitted</footer>
+
+  </div>
+</div>
+</body>
+</html>

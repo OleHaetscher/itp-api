@@ -189,5 +189,5 @@ if __name__ == "__main__":
         converter=converter,
     )
 
-    output_dir = communication.save_messages(root="../")
+    output_dir = communication.save_messages(root=".")
     print(output_dir)
