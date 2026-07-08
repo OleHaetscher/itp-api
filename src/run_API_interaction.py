@@ -4,6 +4,7 @@ from typing import Any
 
 from src.API.APIClient import APIClient
 from src.communication.Communication import Communication
+from src.converter.ConverterRegistry import make_default_converter_registry
 from src.formalmodels.BaseFormalModel import BaseFormalModel
 from src.formalmodels.DummyFormalModels import DummyIPCFormalModel
 from src.utils.utilfuncs import *
@@ -123,4 +124,5 @@ def run_remote_interaction(
 
 
 if __name__ == "__main__":
-    run_remote_interaction()
+    converter = make_default_converter_registry()
+    run_remote_interaction(converter=converter)
