@@ -1,0 +1,69 @@
+# This contains the context data
+# Can be extenerd to other situation frameworks beyond the diamonds
+
+context:
+  - workplace_colleague_conversation:
+      diamonds:
+        duty: 3
+        intellect: 3
+        adversity: 2
+        mating: 1
+        positivity: 5
+        negativity: 2
+        deception: 1
+        sociality: 6
+
+  - workplace_salary_negotiation:
+      diamonds:
+        duty: 6
+        intellect: 4
+        adversity: 5
+        mating: 1
+        positivity: 2
+        negativity: 4
+        deception: 2
+        sociality: 4
+
+  - workplace_performance_appraisal:
+      diamonds:
+        duty: 6
+        intellect: 4
+        adversity: 4
+        mating: 1
+        positivity: 3
+        negativity: 4
+        deception: 1
+        sociality: 4
+
+  - doctor_patient_communication:
+      diamonds:
+        duty: 6
+        intellect: 5
+        adversity: 4
+        mating: 1
+        positivity: 3
+        negativity: 4
+        deception: 1
+        sociality: 5
+
+  - therapist_client_communication:
+      diamonds:
+        duty: 5
+        intellect: 5
+        adversity: 4
+        mating: 1
+        positivity: 4
+        negativity: 4
+        deception: 1
+        sociality: 6
+
+  - colleague_workplace_conversation:
+      diamonds:
+        duty: 3
+        intellect: 3
+        adversity: 2
+        mating: 1
+        positivity: 5
+        negativity: 2
+        deception: 1
+        sociality: 6

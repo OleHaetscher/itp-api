@@ -36,20 +36,20 @@ class ITPSpecification:
 
     def make_message(
         self,
-        source_model_id: str,
-        target_model_id: str,
-        interaction_turn: int,
+        source_agent: str,
+        target_agent: str,
+        timecode: dict[str, Any],
         values: dict[str, float],
         context: str,
-        metadata: dict[str, Any] | None = None,
+        metadata: dict[str, Any] = None,
     ) -> dict[str, Any]:
         """
         Create a valid numerical ITP message.
 
         Args:
-            source_model_id: Identifier of the model producing the message.
-            target_model_id: Identifier of the model receiving the message.
-            interaction_turn: Sequential turn in the interaction.
+            source_agent: Identifier of the model producing the message.
+            target_agent: Identifier of the model receiving the message.
+            timecode: Sequential turn in the interaction.
             values: Numerical values carried by the message.
             context: String describing the interaction context.
             metadata: Optional additional information.
@@ -60,9 +60,9 @@ class ITPSpecification:
 
         message = {
             "schema_version": self.schema_version,
-            "source_model_id": source_model_id,
-            "target_model_id": target_model_id,
-            "interaction_turn": interaction_turn,
+            "source_agent": source_agent,
+            "target_agent": target_agent,
+            "timecode": timecode,
             "values": deepcopy(values),
             "context": context,
         }
@@ -91,9 +91,9 @@ class ITPSpecification:
 
         required_keys = (
             "schema_version",
-            "source_model_id",
-            "target_model_id",
-            "interaction_turn",
+            "source_agent",
+            "target_agent",
+            "timecode",
             "values",
             "context",
         )
@@ -106,20 +106,17 @@ class ITPSpecification:
         if message["schema_version"] != self.schema_version:
             raise ValueError(f"Unsupported schema version: {message['schema_version']}")
 
-        if not isinstance(message["source_model_id"], str):
-            raise TypeError("source_model_id must be a string.")
+        if not isinstance(message["source_agent"], str):
+            raise TypeError("source_agent must be a string.")
 
-        if not isinstance(message["target_model_id"], str):
-            raise TypeError("target_model_id must be a string.")
+        if not isinstance(message["target_agent"], str):
+            raise TypeError("target_agent must be a string.")
 
-        if isinstance(message["interaction_turn"], bool):
-            raise TypeError("interaction_turn must be an integer.")
+        if not isinstance(message["timecode"], dict):
+            raise TypeError("timecode must be a dictionary.")
 
-        if not isinstance(message["interaction_turn"], int):
-            raise TypeError("interaction_turn must be an integer.")
-
-        if message["interaction_turn"] < 0:
-            raise ValueError("interaction_turn must be non-negative.")
+        if not message["timecode"]:
+            raise ValueError("timecode must not be empty.")
 
         if not isinstance(message["values"], dict):
             raise TypeError("values must be a dictionary.")

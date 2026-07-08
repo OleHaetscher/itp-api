@@ -46,8 +46,8 @@ class APIClient:
 
     def generate_message(
         self,
-        target_model_id: str,
-        interaction_turn: int,
+        target_agent: str,
+        timecode: dict[str, Any],
         context: str,
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
@@ -55,8 +55,8 @@ class APIClient:
         Ask the remote model to generate an initial ITP message.
 
         Args:
-            target_model_id: Identifier of the model receiving the generated message.
-            interaction_turn: Sequential turn in the interaction.
+            target_agent: Identifier of the agent receiving the generated message.
+            timecode: Time information for the message.
             context: String describing the interaction context.
             metadata: Optional additional information.
 
@@ -65,8 +65,8 @@ class APIClient:
         """
 
         request = {
-            "target_model_id": target_model_id,
-            "interaction_turn": interaction_turn,
+            "target_agent": target_agent,
+            "timecode": timecode,
             "context": context,
         }
 
@@ -75,7 +75,10 @@ class APIClient:
 
         return self._post("/generate", request)
 
-    def step(self, message: dict[str, Any]) -> dict[str, Any]:
+    def step(
+        self,
+        message: dict[str, Any],
+    ) -> dict[str, Any]:
         """
         Send an ITP message to the remote model and receive its response.
 
@@ -88,7 +91,10 @@ class APIClient:
 
         return self._post("/step", message)
 
-    def _get(self, endpoint: str) -> dict[str, Any]:
+    def _get(
+        self,
+        endpoint: str,
+    ) -> dict[str, Any]:
         """
         Send a GET request to the remote model API.
 
