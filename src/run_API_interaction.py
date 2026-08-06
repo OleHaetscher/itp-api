@@ -48,6 +48,9 @@ def run_remote_interaction(
     """
     Run an interaction between one local and one remote formal model.
 
+    The remote model runs inside an API session. Values are converted by the
+    API itself, so the local converter only aligns messages the runner stores.
+
     Args:
         n_interaction_turns: Number of interaction turns.
         context: String describing the interaction context.
@@ -60,7 +63,11 @@ def run_remote_interaction(
     communication = Communication(context=context)
 
     remote_model = APIClient("http://127.0.0.1:8001")
-    remote_agent = remote_model.get_info()["agent"]
+    remote_agent = remote_model.get_agent()
+
+    remote_session_id = remote_model.create_session(
+        context=communication.context_name,
+    )["session_id"]
 
     local_model: BaseFormalModel = DummyIPCFormalModel(
         model_id="model_b",
@@ -71,12 +78,12 @@ def run_remote_interaction(
 
     for interaction_turn in range(1, n_interaction_turns + 1):
         remote_message = remote_model.generate_message(
+            session_id=remote_session_id,
             target_agent=local_agent,
             timecode=make_timecode(
                 interaction_turn=interaction_turn,
                 message_index=1,
             ),
-            context=communication.context_name,
         )
 
         remote_message_for_local = store_and_prepare_message(
@@ -96,13 +103,12 @@ def run_remote_interaction(
             context=communication.context_name,
         )
 
-        local_message_for_remote = store_and_prepare_message(
-            communication=communication,
-            message=local_message,
-            converter=converter,
-        )
+        communication.receive_message(local_message)
 
-        remote_response = remote_model.step(local_message_for_remote)
+        remote_response = remote_model.step(
+            session_id=remote_session_id,
+            message=local_message,
+        )
 
         remote_response_for_local = store_and_prepare_message(
             communication=communication,
@@ -119,6 +125,8 @@ def run_remote_interaction(
         print(local_message)
         print("Remote model response:")
         print(remote_response)
+
+    remote_model.delete_session(session_id=remote_session_id)
 
     return communication
 

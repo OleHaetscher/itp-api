@@ -1,0 +1,51 @@
+# Parameter configurations for formal models
+
+lassi_formal_model:
+
+  # Shared settings, applied to every axis.
+  #
+  # num_states: number of discrete states per axis. The internal grid is
+  #   0 ... num_states - 1, the ITP "ac" scale is 1 ... num_states.
+  #   The ac <-> ipc converters assume 5 states, so only change this for
+  #   visualization or exploration, not for ITP message exchange.
+  # sigma_floor_steps: lower bound on the kernel width, in grid steps.
+  # boundary_stickiness: weight of the clipped Gaussian in the transport
+  #   kernel; the remaining weight goes to the reflected Gaussian.
+  num_states: 5
+  sigma_floor_steps: 0.3
+  boundary_stickiness: 0.35
+
+  # Per-axis settings.
+  #
+  # name: readable axis name.
+  # BD: behavioral default, on the internal 0 ... num_states - 1 grid.
+  # w_BD: weight of the behavioral-default pull.
+  # w_C: weight of the complementarity increment.
+  # IR: interpersonal reactivity, moderating the complementarity increment.
+  # sigma: width of the bell prior and of the transport kernel.
+  # complementarity_direction: sign of the complementarity increment.
+  #   -1 for anticomplementary axes (agency: dominance invites submission),
+  #   +1 for corresponding axes (communion: warmth invites warmth).
+  # deterministic: whether the discrete state is the mode of the state
+  #   distribution instead of a draw from it.
+  axes:
+
+    A:
+      name: Agency
+      BD: 2.0
+      w_BD: 0.25
+      w_C: 0.35
+      IR: 1.0
+      sigma: 0.8
+      complementarity_direction: -1.0
+      deterministic: true
+
+    C:
+      name: Communion
+      BD: 2.0
+      w_BD: 0.25
+      w_C: 0.35
+      IR: 1.0
+      sigma: 0.8
+      complementarity_direction: 1.0
+      deterministic: true

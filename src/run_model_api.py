@@ -3,7 +3,25 @@ from __future__ import annotations
 import uvicorn
 
 from src.API.APISpecification import APISpecification
+from src.converter.ConverterRegistry import make_default_converter_registry
+from src.formalmodels.BaseFormalModel import BaseFormalModel
 from src.formalmodels.DummyFormalModels import DummySASBFormalModel
+
+
+def make_model() -> BaseFormalModel:
+    """
+    Create a new instance of the formal model exposed by the API.
+
+    Args:
+
+    Returns:
+        Formal model exposed by the API.
+    """
+
+    return DummySASBFormalModel(
+        model_id="model_a",
+        random_seed=1,
+    )
 
 
 def run_api() -> None:
@@ -15,12 +33,10 @@ def run_api() -> None:
     Returns:
     """
 
-    model = DummySASBFormalModel(
-        model_id="model_a",
-        random_seed=1,
+    api = APISpecification(
+        model_factory=make_model,
+        converter=make_default_converter_registry(),
     )
-
-    api = APISpecification(model=model)
 
     uvicorn.run(
         api.app,

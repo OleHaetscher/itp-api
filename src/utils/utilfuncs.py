@@ -1,4 +1,28 @@
+from pathlib import Path
 from typing import Any
+
+import yaml
+
+CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs"
+
+
+def load_config(
+    name: str,
+) -> dict[str, Any]:
+    """
+    Load a YAML config file from the configs directory.
+
+    Args:
+        name: File name of the config, for example "formal_model_parameters.yaml".
+
+    Returns:
+        Config content.
+    """
+
+    path = CONFIG_DIR / name
+
+    with open(path, encoding="utf-8") as config_file:
+        return yaml.safe_load(config_file)
 
 
 def make_timecode(

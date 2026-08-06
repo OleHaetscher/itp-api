@@ -90,9 +90,17 @@ itp/
 ├── README.md
 ├── requirements.txt
 ├── .gitignore
+├── configs/
+│   ├── formal_model_parameters.yaml
+│   └── interaction_contexts.yaml
+│
+├── docs/
+│   └── api_design.md
+│
 ├── src/
 │   ├── ITPSpecification.py
 │   ├── run_API_interaction.py
+│   ├── run_lassi_visualization.py
 │   ├── run_local_interaction.py
 │   ├── run_model_api.py
 │   │
@@ -106,10 +114,10 @@ itp/
 │   ├── converter/
 │   │   ├── BaseConverter.py
 │   │   ├── ConverterRegistry.py
-│   │   └── StateSpaceConverters.py
+│   │   └── BehavioralStateSpaceConverters.py
 │   │
 │   ├── deprecated/
-│   │   └── StateSpaceConverter_deprecated.py
+│   │   └── BehavioralStateSpaceConverter_deprecated.py
 │   │
 │   ├── formalmodels/
 │   │   ├── BaseFormalModel.py
@@ -123,6 +131,10 @@ itp/
 │   │   └── utilfuncs.py
 │   │
 │   └── visualization/
+│       ├── BaseVisualizer.py
+│       ├── FormalModelVisualizer.py
+│       ├── InteractionVisualizer.py
+│       └── LASSIFormalModelVisualizer.py
 ```
 
 ## Main Components
@@ -175,17 +187,71 @@ Both are `monadic` and update their state by averaging their current state with 
 Agency-communion model (`state_space = "ac"`, dimensions `A` and `C`). It keeps an internal
 discrete state on a 0–4 grid but sends and receives discrete states on the ITP 1–5 scale.
 
+Each axis carries a probability distribution over its state grid. One update step computes a
+drift from the behavioral default, the partner state and the interpersonal reactivity, turns
+that drift into a row-stochastic Gaussian transport kernel, and transports the distribution
+through it:
+
+```text
+delta_BD = w_BD * (BD - E[S_t-1])                 behavioral-default pull
+delta_C  = w_C * m * (partner_state - midpoint)   complementarity
+delta_IR = IR * delta_C                           reactivity-moderated
+
+E[S_t] = clip(E[S_t-1] + delta_BD + delta_IR)
+drift  = E[S_t] - E[S_t-1]
+p_t    = p_t-1 @ K(drift)
+```
+
+`m` is `-1` for agency (dominance invites submission) and `+1` for communion (warmth invites
+warmth). Complementarity enters only through `delta_IR`, so an axis with `IR = 0` ignores the
+partner. Each kernel row blends a Gaussian on the clipped target with one on the reflected
+target, weighted by `boundary_stickiness`, which keeps mass from piling up at the grid bounds.
+
+All axis parameters, including `BD`, live on the internal 0-based grid and are read from
+`configs/formal_model_parameters.yaml`. Conversion to and from the ITP 1-based scale happens
+only in `to_itp_state` and `to_internal_state`.
+
+`step_record()` (per axis) and `step_records()` (per model) expose every intermediate quantity
+of the last update, which is what the visualization consumes.
+
+### `visualization`
+
+Dash dashboards, decoupled from the models they render. `BaseVisualizer` owns the shared style,
+the page scaffolding and the Dash hosting; subclasses declare their input source, their page
+content and their callbacks. `FormalModelVisualizer` renders a single formal model without
+interaction data, `InteractionVisualizer` renders a sequence of ITP messages as a trajectory
+(not implemented yet), and `LASSIFormalModelVisualizer` is the interactive walk-through of one
+LASSI update step.
+
 ### `API`
 
 The API module allows formal models to communicate across processes or machines.
 
+One process serves one formal model. State lives in **sessions**: each session
+holds its own model instance and its own `Communication`, so several clients can
+use the same API without sharing model state.
+
 Current endpoints:
 
 ```text
-GET  /info
-POST /generate
-POST /step
+GET    /info                             model description
+POST   /sessions                         create a session
+GET    /sessions                         list session ids
+GET    /sessions/{session_id}            session description
+DELETE /sessions/{session_id}            delete a session
+GET    /sessions/{session_id}/messages   stored ITP messages
+POST   /sessions/{session_id}/generate   model sends without receiving first
+POST   /sessions/{session_id}/step       send a message, receive the response
 ```
+
+Values are converted on the server if they do not match the state space of the
+target agent, in both directions, so a client may use a different state space
+than the model it talks to. `timecode` is optional on `generate` and `step`.
+
+CORS is enabled for a local frontend dev server (`http://localhost:5173`); pass
+`allowed_origins` to `APISpecification` to change this. There is no
+authentication yet — see `docs/api_design.md` for the full design and the open
+questions.
 
 This allows one model to run locally while another model runs remotely, while both still exchange standard ITP messages.
 
@@ -212,6 +278,11 @@ Default converters cover `ac <-> ipc` and `sasb <-> ipc`.
 Note: geometric/geometry constraints between state spaces are **not enforced yet** — conversions
 are numeric approximations. Converters live outside `Communication`; the runner applies them
 before delivering a message to a model with a different state space.
+
+### `configs`
+
+`interaction_contexts.yaml` holds the interaction contexts, `formal_model_parameters.yaml` holds
+the parameters of the formal models. Both are read with `load_config` from `utils/utilfuncs.py`.
 
 ## Setup
 
@@ -247,6 +318,20 @@ One interaction turn currently means:
 4. the second model generates an ITP message
 5. the communication session stores and validates it
 6. the first model integrates it
+
+## Running the LASSI Visualization
+
+Serve the interactive walk-through of one LASSI state distribution update (from the repository
+root):
+
+```bash
+python -m src.run_lassi_visualization
+```
+
+Then open http://127.0.0.1:8050 in a browser. The sliders vary the axis parameters, the axis
+selector switches between agency and communion, and the three figures show the drift, the
+transport kernel and the resulting distribution update. The dashboard recomputes each step on a
+throwaway axis, so it never changes the model it visualizes.
 
 ## Running an API-Based Interaction
 
@@ -286,18 +371,21 @@ Implemented:
 - abstract base class for internal formal models
 - dummy formal models (`DummyIPCFormalModel`, `DummySASBFormalModel`) and `LASSIFormalModel`
 - local interaction between two formal models
-- REST API wrapper for exposing a formal model
+- REST API wrapper for exposing a formal model, with per-session model state and
+  server-side value conversion
 - API client for communicating with a remote model
 - value conversion between state spaces (`ac <-> ipc`, `sasb <-> ipc`) via `ConverterRegistry`
+- interactive visualization of the `LASSIFormalModel` update step
 
 Not yet implemented:
 
+- API authentication and request/response schemas (`docs/api_design.md`)
 - full interaction context logic
 - standardized context representation
 - interaction paradigms
 - LLM-based enactment of formal models
 - geometry constraints for cross-state-space conversion
 - analysis-unit conversion (e.g. monadic <-> transitive)
-- visualization
+- interaction trajectory visualization (`InteractionVisualizer`)
 - richer formal models
 - production-level API handling, authentication, logging, and deployment
