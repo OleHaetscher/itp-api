@@ -43,6 +43,8 @@ import hashlib
 import json
 import threading
 from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -343,6 +345,7 @@ class Interaction:
         persistence_enabled: bool = False,
         starting_role: str = "A",
         converter=None,
+        results_root: str | Path | None = None,
     ) -> None:
         """
         Initialize an interaction.
@@ -356,6 +359,8 @@ class Interaction:
             persistence_enabled: Whether interaction data is kept after the end.
             starting_role: Role of the agent that acts in turn 1.
             converter: Optional converter aligning values with the target agent.
+            results_root: Optional directory below which the record is written
+                when the interaction ends. Nothing is written without it.
 
         Returns:
         """
@@ -370,6 +375,7 @@ class Interaction:
         self.persistence_enabled = persistence_enabled
         self.starting_role = starting_role
         self.converter = converter
+        self.results_root = results_root
 
         self.communication = Communication(context=context)
 
@@ -388,6 +394,7 @@ class Interaction:
         self.actions: dict[tuple[str, str], Action] = {}
         self.turns: list[TurnRecord] = []
         self.results_discarded = False
+        self.results_folder: str | None = None
         self.schemas: dict[str, StateSpaceSchema] = {}
 
         self.cursor = 0
@@ -884,7 +891,76 @@ class Interaction:
                 "turns": [turn.describe() for turn in self.turns],
                 "itpMessages": self.communication.get_messages(),
                 "completedAt": self.ended_at,
+                "resultsFolder": self.results_folder,
             }
+
+    def save_results(
+        self,
+        root: str | Path,
+    ) -> Path | None:
+        """
+        Write the record of the interaction to the results folder.
+
+        The ITP messages are written as the numbered files the local runner
+        produces, so an interaction driven through the API leaves the same
+        record behind as one driven by src/run_local_interaction.py. Beside
+        them, interaction.json holds what only the API knows: which agent was
+        human and which was a model, how the interaction ended, and the bare
+        behavior vector of every turn as it came off the wire.
+
+        The folder name carries the session id as well as the timestamp,
+        because two interactions can end within the same second.
+
+        A failed write is reported and swallowed. This runs inside the action
+        that ends an interaction, and the record is a convenience: a full disk
+        should not turn a completed interaction into a server error after its
+        status has already been set.
+
+        Args:
+            root: Directory below which the results folder is written.
+
+        Returns:
+            Path the record was written to, or None if it could not be written.
+        """
+
+        folder = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.session_id[:8]}"
+
+        record = {
+            "sessionId": self.session_id,
+            "status": self.status,
+            "endReason": self.end_reason,
+            "model": {
+                "id": self.model_entry.model_id,
+                "version": self.model_entry.version,
+            },
+            "numberOfTurns": self.number_of_turns,
+            "context": self.context,
+            "agents": {
+                role: agent.describe() for role, agent in self.agents.items()
+            },
+            "turns": [turn.describe() for turn in self.turns],
+            "itpMessageCount": len(self.communication.messages),
+            "createdAt": self.created_at,
+            "startedAt": self.started_at,
+            "endedAt": self.ended_at,
+        }
+
+        try:
+            directory = self.communication.save_messages(root=root, folder=folder)
+
+            (directory / "interaction.json").write_text(
+                json.dumps(record, indent=4, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+        except OSError as error:
+            print(f"  could not write the results of {self.session_id}: {error}")
+            return None
+
+        self.results_folder = folder
+
+        print(f"  results written to {directory}")
+
+        return directory
 
     def _apply_behavior(
         self,
@@ -1493,6 +1569,9 @@ class Interaction:
         self.end_reason = reason
         self.ended_at = make_iso_timestamp()
         self.active_agent_ids = []
+
+        if self.persistence_enabled and self.results_root is not None:
+            self.save_results(root=self.results_root)
 
         if not self.persistence_enabled:
             self.turns = []

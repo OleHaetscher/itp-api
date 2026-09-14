@@ -444,6 +444,7 @@ class ResultsResponse(BaseModel):
     turns: list[TurnResult]
     itpMessages: list[dict[str, Any]]
     completedAt: str | None = None
+    resultsFolder: str | None = None
 
 
 class ProblemDocument(BaseModel):

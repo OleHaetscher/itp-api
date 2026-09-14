@@ -24,6 +24,7 @@ import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -77,6 +78,7 @@ class InteractionRegistry:
         converter=None,
         invitation_lifetime_seconds: int = DEFAULT_INVITATION_LIFETIME_SECONDS,
         rate_limiter: JoinRateLimiter | None = None,
+        results_root: str | Path | None = None,
     ) -> None:
         """
         Initialize the interaction registry.
@@ -86,6 +88,8 @@ class InteractionRegistry:
             converter: Optional converter aligning values with the target agent.
             invitation_lifetime_seconds: Lifetime of an invitation code.
             rate_limiter: Optional rate limiter for the join endpoint.
+            results_root: Optional directory below which every interaction
+                writes its record when it ends.
 
         Returns:
         """
@@ -94,6 +98,7 @@ class InteractionRegistry:
         self.converter = converter
         self.invitation_lifetime_seconds = invitation_lifetime_seconds
         self.rate_limiter = rate_limiter or JoinRateLimiter()
+        self.results_root = results_root
 
         self.lock = threading.RLock()
 
@@ -164,6 +169,7 @@ class InteractionRegistry:
                 persistence_enabled=persistence_enabled,
                 starting_role=request.get("startingAgentRole", "A"),
                 converter=self.converter,
+                results_root=self.results_root,
             )
 
             token = make_interaction_token()

@@ -27,6 +27,7 @@ a trusted network.
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any, Callable
 
 from fastapi import Depends, FastAPI, Query, Request
@@ -109,6 +110,7 @@ class APISpecification:
         allowed_origins: tuple[str, ...] = DEFAULT_ALLOWED_ORIGINS,
         problem_base_uri: str = DEFAULT_PROBLEM_BASE_URI,
         registry: InteractionRegistry | None = None,
+        results_root: str | Path | None = None,
     ) -> None:
         """
         Initialize the ITP API.
@@ -119,6 +121,9 @@ class APISpecification:
             allowed_origins: Origins allowed to call the API from a browser.
             problem_base_uri: Base URI error types are resolved against.
             registry: Optional pre-built interaction registry.
+            results_root: Optional directory below which every interaction with
+                persistence enabled writes its record when it ends. Nothing is
+                written to disk without it.
 
         Returns:
         """
@@ -129,6 +134,7 @@ class APISpecification:
         self.registry = registry or InteractionRegistry(
             catalogue=catalogue,
             converter=converter,
+            results_root=results_root,
         )
 
         self.app = FastAPI(
