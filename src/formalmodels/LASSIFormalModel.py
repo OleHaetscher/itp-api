@@ -28,6 +28,20 @@ there; the sign of IR is a property of the person and says which way this agent
 answers. Keeping them apart is what lets one dyad hold a complementary and an
 anti-complementary responder at the same time.
 
+The rule above is written in the notation of the spec. This module is written in
+names, and the two do not coincide everywhere:
+
+    lam                 lambda_relax
+    T                   partner_target
+    d                   direction
+    h                   repertoire
+    mu_t-1              mu_prev
+    p_t-1, p_t          p_prev, p_new
+    s_bar               s_bar in a step record, midpoint on the axis
+    m                   m in a step record, complementarity_direction on the axis
+
+BD, tau, IR, IR_abs, mu_t and eta are spelled the same on both sides.
+
 Scale convention: the parameters in configs/formal_model_parameters.yaml are on
 the ITP 1-based scale 1 ... N, the scale ITP messages carry. They are converted
 to the internal centered grid when an axis is built, and back in to_itp_state.
