@@ -6,14 +6,14 @@
     {
       "caption": "Interpersonal circumplex",
       "abbreviation": "IPC",
-      "description": "Circular interpersonal state space representing behavior by angular position in the agency-communion circumplex and radial amplitude from the neutral center. The angle zero direction is positive communion, and angles increase counterclockwise toward positive agency.",
+      "description": "Circular interpersonal state space representing behavior by angular position in the agency-communion circumplex and radial amplitude from the neutral center. The angle zero direction is positive communion, and angles increase counterclockwise toward positive agency. The neutral center is part of the space and is identified by a radius of zero, at which the angular position carries no information.",
       "type": "circular",
       "coordinates": {
         "system": "polar",
         "angle": {
           "caption": "Circumplex angle",
           "abbreviation": "Theta",
-          "description": "Angular position in the interpersonal circumplex.",
+          "description": "Angular position in the interpersonal circumplex. The angle is undefined at the neutral center: when R is 0, every value of Theta denotes the same state. Theta is then reported as 0 by convention, and consumers must not interpret it unless R is greater than 0.",
           "unit": "degree",
           "labels": {
             "0": "LM",
@@ -31,11 +31,11 @@
         "radius": {
           "caption": "Amplitude",
           "abbreviation": "R",
-          "description": "Distance from the neutral center of the interpersonal circumplex, representing the intensity of interpersonal behavior. The neutral center itself is excluded because the angular position is undefined at radius zero.",
+          "description": "Distance from the neutral center of the interpersonal circumplex, representing the intensity of interpersonal behavior. The neutral center is included in the space: R equal to 0 denotes the absence of interpersonal behavior and is the sentinel for a state whose angular position is undefined. See the description of Theta.",
           "range": {
             "minimum": 0,
             "maximum": 1,
-            "minimumInclusive": false,
+            "minimumInclusive": true,
             "maximumInclusive": true
           }
         }
@@ -49,7 +49,7 @@
         ],
         "notation": "s = (Theta, R)",
         "format": "object",
-        "description": "A momentary interpersonal state represented by circumplex angle and radial amplitude."
+        "description": "A momentary interpersonal state represented by circumplex angle and radial amplitude. A radius of zero denotes the neutral center, where the angle is undefined."
       }
     }
   ]
