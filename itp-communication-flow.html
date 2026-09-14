@@ -10,51 +10,29 @@
   </style>
 <style>
   :root {
-    --bg: #F1F3F6;
+    color-scheme: light;
+    --bg: #FAFAFA;
     --surface: #FFFFFF;
-    --surface-2: #E9ECF1;
-    --ink: #171B21;
-    --muted: #5B646F;
-    --line: #D8DDE4;
-    --c-model: #0B6E75;
-    --c-store: #33489F;
-    --c-convert: #9C5600;
-    --c-api: #7A3E8F;
-    --c-spec: #4A5561;
-    --shadow: 0 1px 2px rgba(16,20,26,.06), 0 4px 14px rgba(16,20,26,.05);
+    --surface-2: #F3F4F6;
+    --ink: #1F2937;
+    --muted: #6B7280;
+    --line: #E5E7EB;
+    --c-model: #2C6BB5;
+    --c-store: #315A7D;
+    --c-convert: #8F5B12;
+    --c-api: #0E6B51;
+    --c-spec: #4B5563;
+    --accent: #3B82D6;
+    --primary: #2C6BB5;
+    --shadow: 0 1px 2px 0 rgba(31,41,55,.05), 0 6px 18px -4px rgba(31,41,55,.12);
     --mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
-    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0E1116;
-      --surface: #161A20;
-      --surface-2: #1D232B;
-      --ink: #E9ECF0;
-      --muted: #98A2AD;
-      --line: #29313A;
-      --c-model: #2FB7C0;
-      --c-store: #7F95F2;
-      --c-convert: #E0982E;
-      --c-api: #C88FD9;
-      --c-spec: #9BA7B3;
-      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.35);
-    }
-  }
-  :root[data-theme="light"] {
-    --bg: #F1F3F6; --surface: #FFFFFF; --surface-2: #E9ECF1;
-    --ink: #171B21; --muted: #5B646F; --line: #D8DDE4;
-    --c-model: #0B6E75; --c-store: #33489F; --c-convert: #9C5600;
-    --c-api: #7A3E8F; --c-spec: #4A5561;
-    --shadow: 0 1px 2px rgba(16,20,26,.06), 0 4px 14px rgba(16,20,26,.05);
-  }
-  :root[data-theme="dark"] {
-    --bg: #0E1116; --surface: #161A20; --surface-2: #1D232B;
-    --ink: #E9ECF0; --muted: #98A2AD; --line: #29313A;
-    --c-model: #2FB7C0; --c-store: #7F95F2; --c-convert: #E0982E;
-    --c-api: #C88FD9; --c-spec: #9BA7B3;
-    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.35);
-  }
+  /* Light only, deliberately. The dashboards and the mock client are light, and
+     these diagrams are read beside them and pasted into slides and papers on a
+     white ground; a page that flips with the reader's OS setting would not be
+     the same artefact twice. There is no prefers-color-scheme block and no
+     theme toggle, so the palette above is the palette. */
 
   * { box-sizing: border-box; }
   body { margin: 0; }
@@ -72,32 +50,33 @@
 
   /* ---- header ---- */
   .eyebrow {
-    font-family: var(--mono);
-    font-size: .72rem;
-    letter-spacing: .18em;
+    font-family: var(--sans);
+    font-size: 13px;
+    letter-spacing: .08em;
     text-transform: uppercase;
-    color: var(--c-model);
-    margin: 0 0 .7rem;
+    color: var(--accent);
+    margin: 0 0 6px;
+    font-weight: 600;
   }
   h1 {
-    font-size: clamp(1.7rem, 3.6vw, 2.6rem);
-    line-height: 1.08;
+    font-size: clamp(1.8rem, 3.4vw, 2.125rem);
+    line-height: 1.15;
     letter-spacing: -.02em;
-    font-weight: 720;
-    margin: 0 0 .6rem;
+    font-weight: 700;
+    margin: 0 0 8px;
     text-wrap: balance;
   }
   .lede {
-    max-width: 62ch;
+    max-width: 78ch;
     color: var(--muted);
-    font-size: 1.02rem;
+    font-size: 15px;
     margin: 0;
   }
 
   h2 {
-    font-size: 1.02rem;
+    font-size: 17px;
     letter-spacing: -.01em;
-    font-weight: 680;
+    font-weight: 600;
     margin: 0;
     display: flex;
     align-items: baseline;
@@ -105,14 +84,14 @@
   }
   h2 .idx {
     font-family: var(--mono);
-    font-size: .78rem;
+    font-size: 13px;
     color: var(--muted);
     font-weight: 500;
   }
   .section { margin-top: clamp(2.2rem, 5vw, 3.4rem); }
   .section > p.note {
     color: var(--muted);
-    font-size: .92rem;
+    font-size: 15px;
     margin: .5rem 0 0;
     max-width: 70ch;
   }
@@ -125,11 +104,20 @@
     margin-top: 1.1rem;
   }
   .legend .item {
-    display: inline-flex; align-items: center; gap: .45rem;
-    font-family: var(--mono); font-size: .72rem;
-    letter-spacing: .04em; color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: normal;
   }
-  .dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex: none;
+  }
 
   /* ---- inventory grid ---- */
   .grid {
@@ -141,33 +129,49 @@
   .card {
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 12px;
+    border-radius: 10px;
     padding: 1.05rem 1.1rem 1.15rem;
     box-shadow: var(--shadow);
-    display: flex; flex-direction: column; gap: .55rem;
+    display: flex;
+    flex-direction: column;
+    gap: .55rem;
   }
   .chip {
     align-self: flex-start;
-    font-family: var(--mono);
-    font-size: .64rem;
+    font-family: var(--sans);
+    font-size: 11px;
     font-weight: 600;
-    letter-spacing: .12em;
+    letter-spacing: .06em;
     text-transform: uppercase;
-    padding: .26rem .5rem;
-    border-radius: 5px;
+    padding: .3rem .6rem;
+    border-radius: 999px;
     line-height: 1;
   }
   .card .file {
     font-family: var(--mono);
-    font-size: .72rem;
+    font-size: 12px;
     color: var(--muted);
     margin: -.1rem 0 .2rem;
+    overflow-wrap: anywhere;
   }
-  .cls { font-family: var(--mono); font-weight: 600; font-size: .9rem; }
+  .cls {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: -.01em;
+  }
   .card ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .5rem; }
   .card li { display: flex; flex-direction: column; gap: .12rem; }
-  .card li .m { font-family: var(--mono); font-size: .8rem; color: var(--ink); }
-  .card li .d { font-size: .82rem; color: var(--muted); line-height: 1.4; }
+  .card li .m {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .card li .d {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.45;
+  }
 
   /* role color helpers */
   .r-model  { color: var(--c-model); }
@@ -195,18 +199,19 @@
   .flow {
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 14px;
+    border-radius: 10px;
     padding: 1.3rem 1.25rem 1.5rem;
     box-shadow: var(--shadow);
   }
   .flow h3 {
     margin: 0 0 .2rem;
-    font-size: 1rem;
+    font-size: 16px;
     letter-spacing: -.01em;
+    font-weight: 600;
   }
   .flow .sub {
-    font-family: var(--mono);
-    font-size: .72rem;
+    font-family: var(--sans);
+    font-size: 13px;
     color: var(--muted);
     margin: 0 0 1.1rem;
   }
@@ -217,7 +222,9 @@
     border-radius: 10px;
     background: var(--surface);
     padding: .7rem .8rem .75rem;
-    display: flex; flex-direction: column; gap: .3rem;
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
   }
   .node.tint-model  { background: color-mix(in srgb, var(--c-model) 8%, var(--surface)); border-color: color-mix(in srgb, var(--c-model) 30%, var(--line)); }
   .node.tint-store  { background: color-mix(in srgb, var(--c-store) 8%, var(--surface)); border-color: color-mix(in srgb, var(--c-store) 30%, var(--line)); }
@@ -229,12 +236,23 @@
     display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
   }
   .node .actor {
-    font-family: var(--mono);
-    font-size: .6rem; font-weight: 600;
-    letter-spacing: .1em; text-transform: uppercase;
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
   }
-  .node .call { font-family: var(--mono); font-size: .82rem; font-weight: 600; color: var(--ink); }
-  .node .desc { font-size: .8rem; color: var(--muted); line-height: 1.45; }
+  .node .call {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .node .desc {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.45;
+  }
   .node.cond .actor::after { content: " · conditional"; color: var(--muted); font-weight: 500; }
 
   .conn {
@@ -242,19 +260,23 @@
     padding: .1rem 0; gap: .12rem;
   }
   .conn .lbl {
-    font-family: var(--mono); font-size: .66rem; color: var(--muted);
-    letter-spacing: .02em; text-align: center; max-width: 90%;
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: normal;
+    text-align: center;
+    max-width: 90%;
   }
   .conn .bar { width: 2px; height: 9px; background: var(--line); }
-  .conn .tip { font-size: .74rem; color: var(--muted); line-height: .6; margin-top: -2px; }
+  .conn .tip { font-size: 12px; color: var(--muted); line-height: .6; margin-top: -2px; }
 
   .msg-token {
     border: 1px dashed color-mix(in srgb, var(--c-spec) 45%, var(--line));
-    border-radius: 10px;
+    border-radius: 8px;
     background: var(--surface-2);
     padding: .65rem .8rem;
     font-family: var(--mono);
-    font-size: .7rem;
+    font-size: 12px;
     color: var(--muted);
     line-height: 1.5;
   }
@@ -264,22 +286,22 @@
     margin-top: 1.1rem;
     padding-top: .9rem;
     border-top: 1px solid var(--line);
-    font-size: .8rem;
+    font-size: 13px;
     color: var(--muted);
-    line-height: 1.5;
+    line-height: 1.55;
   }
   .flow .foot .m { font-family: var(--mono); color: var(--ink); }
 
   .callouts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-top: 1.3rem; }
-  .callout { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.05rem; box-shadow: var(--shadow); }
-  .callout h4 { margin: 0 0 .4rem; font-size: .82rem; font-family: var(--mono); letter-spacing: .03em; }
-  .callout p { margin: 0; font-size: .84rem; color: var(--muted); line-height: 1.5; }
-  .callout code { font-family: var(--mono); font-size: .78rem; color: var(--ink); background: var(--surface-2); padding: .05rem .3rem; border-radius: 4px; }
+  .callout { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.05rem; box-shadow: var(--shadow); }
+  .callout h4 { margin: 0 0 .4rem; font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+  .callout p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .callout code { font-family: var(--mono); font-size: 13px; color: var(--ink); background: var(--surface-2); padding: .05rem .3rem; border-radius: 4px; }
 
   footer.foot-note {
     margin-top: 2.6rem;
     font-family: var(--mono);
-    font-size: .7rem;
+    font-size: 11px;
     color: var(--muted);
     letter-spacing: .02em;
   }
@@ -296,6 +318,7 @@
       <p class="eyebrow">Interpersonal Transaction Protocol · schema v0.2</p>
       <h1>How one ITP communication flows through the codebase</h1>
       <p class="lede">A single interaction is a sequence of nested ITP messages passing between formal models. Every message is produced, validated, stored, converted when state spaces differ, and integrated — never mutated in place. This maps each step to the class and method that performs it.</p>
+      <p class="lede" style="margin-top:.6rem;">The HTTP surface that carries this between a browser and the server — endpoints, turns, participants, invitation codes — is the companion document, <a href="itp-api-flow.html" style="color:var(--c-api);">itp-api-flow.html</a>.</p>
 
       <div class="legend" aria-label="Role colors">
         <span class="item"><span class="dot spec"></span>Protocol / helpers</span>
@@ -357,7 +380,7 @@
           <ul>
             <li><span class="m">DummyIPCFormalModel</span><span class="d">space "ipc", dims Theta · R.</span></li>
             <li><span class="m">DummySASBFormalModel</span><span class="d">space "sasb", dims Aff · Int.</span></li>
-            <li><span class="m">LASSIFormalModel (+ LASSIAxis)</span><span class="d">space "ac", dims A · C; internal 0–4 grid, ITP I/O on 1–5.</span></li>
+            <li><span class="m">LASSIFormalModel (+ LASSIAxis)</span><span class="d">space "ac", dims A · C; internal centred grid −3 … +3, ITP I/O on 1–7.</span></li>
           </ul>
         </div>
 
@@ -374,22 +397,11 @@
         <div class="card">
           <span class="chip convert">Converter</span>
           <span class="cls r-convert">ConverterRegistry</span>
-          <span class="file">ConverterRegistry.py · StateSpaceConverters.py</span>
+          <span class="file">ConverterRegistry.py · BehavioralStateSpaceConverters.py</span>
           <ul>
             <li><span class="m">register / get_converter</span><span class="d">Look up by (source, target); missing → error.</span></li>
             <li><span class="m">needs_conversion / convert_message</span><span class="d">Decide and dispatch.</span></li>
-            <li><span class="m">AC↔IPC · SASB↔IPC</span><span class="d">Four registered converters. Geometry not enforced yet.</span></li>
-          </ul>
-        </div>
-
-        <div class="card">
-          <span class="chip api">API</span>
-          <span class="cls r-api">APIClient</span>
-          <span class="file">src/API/APIClient.py</span>
-          <ul>
-            <li><span class="m">get_info / get_agent</span><span class="d">GET /info → remote agent description.</span></li>
-            <li><span class="m">generate_message</span><span class="d">POST /generate with target_agent as a dict.</span></li>
-            <li><span class="m">step</span><span class="d">POST /step with a full ITP message.</span></li>
+            <li><span class="m">AC↔IPC · SASB↔IPC</span><span class="d">Four registered converters. They do not enforce target geometry; the API validates every converted vector instead.</span></li>
           </ul>
         </div>
 
@@ -398,9 +410,31 @@
           <span class="cls r-api">APISpecification</span>
           <span class="file">src/API/APISpecification.py</span>
           <ul>
-            <li><span class="m">GET /info</span><span class="d">{agent, dimensions, schema_version}.</span></li>
-            <li><span class="m">POST /generate</span><span class="d">model.to_message() with no incoming message.</span></li>
-            <li><span class="m">POST /step</span><span class="d">Validate target id → from_message → to_message.</span></li>
+            <li><span class="m">10 routes under /api/v1</span><span class="d">Models, interactions, registration, perception, actions, results.</span></li>
+            <li><span class="m">authenticate</span><span class="d">Bearer token → the interaction and the agent it is bound to.</span></li>
+            <li><span class="m">problem+json handlers</span><span class="d">Every error rendered as an RFC 9457 document.</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="chip api">API</span>
+          <span class="cls r-api">Interaction · registry</span>
+          <span class="file">src/API/Interaction.py · InteractionRegistry.py</span>
+          <ul>
+            <li><span class="m">Interaction</span><span class="d">Owns the lifecycle, the turn counter, perceptions and actions. Holds one Communication.</span></li>
+            <li><span class="m">InteractionRegistry</span><span class="d">Interactions, hashed tokens, invitation codes, idempotency.</span></li>
+            <li><span class="m">StateSpaceSchema · ModelCatalogue</span><span class="d">Compiles IBSSS descriptions into validating JSON Schemas; the served models.</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="chip api">API</span>
+          <span class="cls r-api">APIClient</span>
+          <span class="file">src/API/APIClient.py</span>
+          <ul>
+            <li><span class="m">create_interaction / join_interaction</span><span class="d">Stores the interaction token returned to the client.</span></li>
+            <li><span class="m">poll_perception / submit_action</span><span class="d">Bare state vectors, not ITP messages.</span></li>
+            <li><span class="m">get_results</span><span class="d">Turn record plus the ITP messages behind it.</span></li>
           </ul>
         </div>
 
@@ -410,6 +444,7 @@
           <span class="file">src/utils/utilfuncs.py</span>
           <ul>
             <li><span class="m">make_timecode</span><span class="d">Build {timestamp, interaction_turn}.</span></li>
+            <li><span class="m">make_iso_timestamp</span><span class="d">ISO 8601 UTC, used by the API layer.</span></li>
             <li><span class="m">needs_conversion</span><span class="d">Compare values vs target state_space / analysis_unit.</span></li>
             <li><span class="m">prepare_message_for_target</span><span class="d">Convert if needed, else pass through.</span></li>
           </ul>
@@ -431,8 +466,8 @@
           <span class="file">src/run_*.py</span>
           <ul>
             <li><span class="m">run_local_interaction</span><span class="d">Two local models exchange N turns.</span></li>
-            <li><span class="m">run_model_api</span><span class="d">Serve one model over FastAPI (port 8001).</span></li>
-            <li><span class="m">run_API_interaction</span><span class="d">Local model talks to a remote one.</span></li>
+            <li><span class="m">run_model_api</span><span class="d">Serve the model catalogue over FastAPI (port 8001).</span></li>
+            <li><span class="m">run_API_interaction</span><span class="d">One interaction of each dyad configuration against the API.</span></li>
           </ul>
         </div>
 
@@ -444,13 +479,14 @@
     <!-- ============ THE MESSAGE ============ -->
     <section class="section">
       <h2><span class="idx">02</span> What flows — the ITP message (v0.2)</h2>
-      <p class="note">The single object passed between every participant. Only <span class="r-spec" style="font-family:var(--mono)">values.data</span> is integrated by a receiving model; everything else is routing and provenance.</p>
+      <p class="note">The single object passed between every participant. Only <span class="r-spec" style="font-family:var(--mono)">values.data</span> is integrated by a receiving model; everything else is routing and provenance. Messages built by the API carry two extra timecode keys, <span class="r-api" style="font-family:var(--mono)">api_turn</span> and <span class="r-api" style="font-family:var(--mono)">iso_timestamp</span>.</p>
       <div class="msg-token" style="margin-top:1.1rem;">
         {<br>
         &nbsp;&nbsp;<b>schema_version</b>: "0.2",<br>
         &nbsp;&nbsp;<b>source_agent</b>: { id, state_space, analysis_unit },<br>
         &nbsp;&nbsp;<b>target_agent</b>: { id, state_space, analysis_unit },<br>
-        &nbsp;&nbsp;<b>timecode</b>: { timestamp, interaction_turn },<br>
+        &nbsp;&nbsp;<b>timecode</b>: { timestamp, interaction_turn<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;, api_turn?, iso_timestamp? },<br>
         &nbsp;&nbsp;<b>values</b>: { state_space, analysis_unit, <b>data</b>: { dim: number } },<br>
         &nbsp;&nbsp;<b>context</b>: "workplace_colleague_conversation",<br>
         &nbsp;&nbsp;<b>metadata</b>?: { message_type, conversion }<br>
@@ -463,7 +499,7 @@
     <!-- ============ FLOWS ============ -->
     <section class="section">
       <h2><span class="idx">03</span> The two communication flows</h2>
-      <p class="note">Read each column top to bottom — it is one message crossing from a source to a target. The reply repeats it with the roles swapped, and the runner loops for N turns.</p>
+      <p class="note">Read each column top to bottom — it is one message crossing from a source to a target. The steps are the same in both; what differs is who orchestrates them and where the session lives.</p>
 
       <div class="flows">
 
@@ -513,46 +549,46 @@
 
         <!-- API -->
         <div class="flow">
-          <h3>API remote interaction</h3>
-          <p class="sub">run_API_interaction.py + run_model_api.py — across processes</p>
+          <h3>API interaction</h3>
+          <p class="sub">run_model_api.py — the server owns the session</p>
           <div class="lane">
 
             <div class="node tint-api">
-              <div class="head"><span class="actor r-api">APIClient → APISpecification</span></div>
-              <span class="call">get_info() · GET /info</span>
-              <span class="desc">Remote returns {agent, dimensions, schema_version}; agent = remote.to_agent().</span>
+              <div class="head"><span class="actor r-api">Client</span></div>
+              <span class="call">POST .../agents/{agentId}/actions</span>
+              <span class="desc">A bare state vector, {actionId, turn, behavior}. The browser never assembles an ITP message; it does not know the agent ids or the timecode.</span>
             </div>
-            <div class="conn"><span class="lbl">POST /generate (target_agent as dict)</span><span class="bar"></span><span class="tip">▼</span></div>
+            <div class="conn"><span class="lbl">Interaction._apply_behavior()</span><span class="bar"></span><span class="tip">▼</span></div>
 
             <div class="node tint-api">
-              <div class="head"><span class="actor r-api">APISpecification</span></div>
-              <span class="call">generate_message() → remote.to_message()</span>
-              <span class="desc">Remote model produces a nested ITP message and returns it over HTTP.</span>
+              <div class="head"><span class="actor r-api">Interaction</span></div>
+              <span class="call">_make_itp_message(agent, partner, behavior)</span>
+              <span class="desc">Wraps the vector: source and target from the agent slots, timecode from the API turn, context from the session. The same make_values() / make_message() as the local flow.</span>
             </div>
-            <div class="conn"><span class="lbl">receive_message() + prepare_message_for_target()</span><span class="bar"></span><span class="tip">▼</span></div>
+            <div class="conn"><span class="lbl">receive_message() · store original</span><span class="bar"></span><span class="tip">▼</span></div>
 
             <div class="node tint-store">
-              <div class="head"><span class="actor r-store">Communication + ConverterRegistry</span></div>
-              <span class="call">store original → convert if needed → store converted</span>
-              <span class="desc">Same store-both-copies rule as the local flow; conversion is conditional on state space.</span>
+              <div class="head"><span class="actor r-store">Communication</span></div>
+              <span class="call">receive_message(original)</span>
+              <span class="desc">The session lives inside the Interaction, on the server. Same validation, same deep copy as the local flow.</span>
             </div>
-            <div class="conn"><span class="lbl">from_message()</span><span class="bar"></span><span class="tip">▼</span></div>
+            <div class="conn"><span class="lbl">_convert_for_target() · needs conversion?</span><span class="bar"></span><span class="tip">▼</span></div>
+
+            <div class="node tint-convert cond">
+              <div class="head"><span class="actor r-convert">ConverterRegistry</span></div>
+              <span class="call">convert_message() → validate_vector()</span>
+              <span class="desc">Only when the agents work in different state spaces. The converted vector is then checked against the partner's schema: one that left the target space fails the interaction instead of reaching a client.</span>
+            </div>
+            <div class="conn"><span class="lbl">deliver</span><span class="bar"></span><span class="tip">▼</span></div>
 
             <div class="node tint-model">
-              <div class="head"><span class="actor r-model">Local model</span></div>
-              <span class="call">local.from_message() → local.to_message()</span>
-              <span class="desc">Integrates values["data"], then generates its own reply message.</span>
-            </div>
-            <div class="conn"><span class="lbl">step(message) · POST /step</span><span class="bar"></span><span class="tip">▼</span></div>
-
-            <div class="node tint-api">
-              <div class="head"><span class="actor r-api">APISpecification</span></div>
-              <span class="call">step() — validate target_agent.id</span>
-              <span class="desc">Rejects mismatched target, then remote.from_message() → remote.to_message() as the response (looped back into the store above).</span>
+              <div class="head"><span class="actor r-model">Partner</span></div>
+              <span class="call">perception queued · from_message()</span>
+              <span class="desc">The values become the partner's experience, read by GET .../perception. If the partner is a formal model, the server also integrates the message and plays its turn straight away.</span>
             </div>
 
           </div>
-          <p class="foot">The <span class="m">Communication</span> session lives on the client side and records every message that crosses the wire, original and converted.</p>
+          <p class="foot">The <span class="m">Communication</span> lives on the server, one per interaction, and <span class="m">GET /results</span> returns it under <span class="m">itpMessages</span> — so an API-driven interaction produces the same record as a local one. Endpoints, turns and access: <a href="itp-api-flow.html" style="color:var(--c-api);">itp-api-flow.html</a>.</p>
         </div>
 
       </div>
@@ -583,7 +619,8 @@
       </div>
     </section>
 
-    <footer class="foot-note">ITP reference implementation · communication flow · deprecated module omitted</footer>
+    <footer class="foot-note">ITP reference implementation · communication flow · deprecated module omitted<br>
+      HTTP surface: <a href="itp-api-flow.html" style="color:var(--c-api);">itp-api-flow.html</a> · design notes: docs/api_design.md</footer>
 
   </div>
 </div>

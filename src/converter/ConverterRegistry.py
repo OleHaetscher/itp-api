@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.converter.BaseConverter import BaseConverter
-from src.converter.StateSpaceConverters import (
+from src.converter.BehavioralStateSpaceConverters import (
     ACToIPCConverter,
     IPCToACConverter,
     IPCToSASBConverter,

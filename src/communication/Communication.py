@@ -204,19 +204,25 @@ class Communication:
     def save_messages(
         self,
         root: str | Path = ".",
+        folder: str | None = None,
     ) -> Path:
         """
-        Save all stored ITP messages to a timestamped results folder.
+        Save all stored ITP messages to a results folder.
 
         Args:
             root: Project root directory.
+            folder: Name of the folder below results/. Defaults to a timestamp,
+                which collides when two sessions end within the same second, so
+                a caller that can have several in flight passes its own name.
 
         Returns:
             Path to the directory containing the saved messages.
         """
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_dir = Path(root) / "results" / timestamp
+        if folder is None:
+            folder = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        output_dir = Path(root) / "results" / folder
         output_dir.mkdir(parents=True, exist_ok=True)
 
         for message_index, message in enumerate(self.messages, start=1):

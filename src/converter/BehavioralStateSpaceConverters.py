@@ -7,6 +7,26 @@ from src.converter.BaseConverter import BaseConverter
 # NOTE: These converters map values numerically between state spaces but do NOT
 # enforce geometry constraints (e.g. valid regions, radius bounds, or lattice
 # structure of the target space). Geometry constraints are not implemented yet.
+#
+# The one geometric case that is handled is the neutral center. A Cartesian
+# space such as SASB or the agency-communion box contains its own center, and
+# converting that center into the polar IPC space yields a radius of zero, where
+# the angle is undefined. IPC includes that point and marks it by R = 0; Theta
+# is then reported as NEUTRAL_CENTER_ANGLE by convention and carries no
+# information. See schema/interpersonal-behavior-state-space/ipc.json.
+
+# Angle reported for the IPC neutral center, where no angle is defined.
+NEUTRAL_CENTER_ANGLE = 0.0
+
+# Number of discrete states per agency-communion axis, with the midpoint and the
+# distance from it to either end derived from it. The agency-communion state
+# space is defined on 1 ... AC_NUM_STATES in
+# schema/interpersonal-behavior-state-space/haetscher-et-al-preprint.json, and
+# LASSIFormalModel is configured to the same number of states. Changing one of
+# the three without the others silently rescales every converted message.
+AC_NUM_STATES = 7
+AC_MIDPOINT = (AC_NUM_STATES + 1) / 2
+AC_HALF_RANGE = (AC_NUM_STATES - 1) / 2
 
 
 def _clip(
@@ -52,6 +72,11 @@ def _cartesian_to_ipc(
     """
     Convert normalized agency-communion coordinates to IPC polar coordinates.
 
+    At the neutral center the angle is undefined, because every angle denotes
+    the same state there. It is reported as NEUTRAL_CENTER_ANGLE rather than
+    left to whatever atan2 returns for the origin, so the convention is visible
+    rather than incidental.
+
     Args:
         agency: Normalized agency value.
         communion: Normalized communion value.
@@ -60,9 +85,15 @@ def _cartesian_to_ipc(
         IPC values.
     """
 
+    radius = _clip(math.sqrt(agency**2 + communion**2), 0.0, 1.0)
+
+    if radius == 0.0:
+        return {
+            "Theta": NEUTRAL_CENTER_ANGLE,
+            "R": 0.0,
+        }
+
     theta = math.degrees(math.atan2(agency, communion)) % 360
-    radius = math.sqrt(agency**2 + communion**2)
-    radius = _clip(radius, 0.0, 1.0)
 
     return {
         "Theta": float(theta),
@@ -76,6 +107,9 @@ def _ipc_to_cartesian(
 ) -> dict[str, float]:
     """
     Convert IPC polar coordinates to normalized agency-communion coordinates.
+
+    A radius of zero maps onto the origin for every angle, which is the correct
+    reading of the IPC neutral center: the angle carries no information there.
 
     Args:
         theta: IPC angle in degrees.
@@ -127,15 +161,15 @@ class ACToIPCConverter(BaseConverter):
         Convert AC values to IPC values.
 
         Args:
-            source_input: AC values with A and C on a 1-5 scale.
+            source_input: AC values with A and C on a 1 ... AC_NUM_STATES scale.
             context: Optional string describing the interaction context.
 
         Returns:
             IPC values with Theta and R.
         """
 
-        agency = (source_input["A"] - 3) / 2
-        communion = (source_input["C"] - 3) / 2
+        agency = (source_input["A"] - AC_MIDPOINT) / AC_HALF_RANGE
+        communion = (source_input["C"] - AC_MIDPOINT) / AC_HALF_RANGE
 
         return _cartesian_to_ipc(
             agency=agency,
@@ -177,7 +211,7 @@ class IPCToACConverter(BaseConverter):
             context: Optional string describing the interaction context.
 
         Returns:
-            AC values with A and C on a 1-5 scale.
+            AC values with A and C on a 1 ... AC_NUM_STATES scale.
         """
 
         coordinates = _ipc_to_cartesian(
@@ -185,12 +219,12 @@ class IPCToACConverter(BaseConverter):
             radius=source_input["R"],
         )
 
-        agency = 3 + 2 * coordinates["agency"]
-        communion = 3 + 2 * coordinates["communion"]
+        agency = AC_MIDPOINT + AC_HALF_RANGE * coordinates["agency"]
+        communion = AC_MIDPOINT + AC_HALF_RANGE * coordinates["communion"]
 
         return {
-            "A": _round_int(_clip(agency, 1, 5)),
-            "C": _round_int(_clip(communion, 1, 5)),
+            "A": _round_int(_clip(agency, 1, AC_NUM_STATES)),
+            "C": _round_int(_clip(communion, 1, AC_NUM_STATES)),
         }
 
 

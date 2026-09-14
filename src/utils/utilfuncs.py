@@ -1,4 +1,29 @@
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
+
+import yaml
+
+CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs"
+
+
+def load_config(
+    name: str,
+) -> dict[str, Any]:
+    """
+    Load a YAML config file from the configs directory.
+
+    Args:
+        name: File name of the config, for example "formal_model_parameters.yaml".
+
+    Returns:
+        Config content.
+    """
+
+    path = CONFIG_DIR / name
+
+    with open(path, encoding="utf-8") as config_file:
+        return yaml.safe_load(config_file)
 
 
 def make_timecode(
@@ -65,3 +90,22 @@ def prepare_message_for_target(
         )
 
     return converter.convert_message(message)
+
+def make_iso_timestamp() -> str:
+    """
+    Create an ISO 8601 timestamp in UTC.
+
+    The ITP API specification requires all API timestamps in this format.
+
+    Args:
+
+    Returns:
+        Timestamp, for example "2026-07-31T08:45:00Z".
+    """
+
+    return (
+        datetime.now(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )

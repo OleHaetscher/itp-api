@@ -1,0 +1,1237 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ITP API Flow</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+  </style>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #FAFAFA;
+    --surface: #FFFFFF;
+    --surface-2: #F3F4F6;
+    --ink: #1F2937;
+    --muted: #6B7280;
+    --line: #E5E7EB;
+    --c-model: #2C6BB5;
+    --c-store: #315A7D;
+    --c-convert: #8F5B12;
+    --c-api: #0E6B51;
+    --c-spec: #4B5563;
+    --c-stop: #C21F1F;
+    --accent: #3B82D6;
+    --primary: #2C6BB5;
+    --shadow: 0 1px 2px 0 rgba(31,41,55,.05), 0 6px 18px -4px rgba(31,41,55,.12);
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+  /* Light only, deliberately. The dashboards and the mock client are light, and
+     these diagrams are read beside them and pasted into slides and papers on a
+     white ground; a page that flips with the reader's OS setting would not be
+     the same artefact twice. There is no prefers-color-scheme block and no
+     theme toggle, so the palette above is the palette. */
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); }
+
+  .page {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    padding-block: clamp(1.5rem, 4vw, 3.5rem);
+    padding-inline: clamp(1rem, 4vw, 2rem);
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1140px; margin: 0 auto; }
+
+  :where(a, button, summary):focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  /* ---- header ---- */
+  .eyebrow {
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 6px;
+  }
+  h1 {
+    font-size: clamp(1.8rem, 3.4vw, 2.125rem);
+    line-height: 1.15;
+    letter-spacing: -.02em;
+    font-weight: 700;
+    margin: 0 0 8px;
+    text-wrap: balance;
+  }
+  .lede {
+    max-width: 78ch;
+    color: var(--muted);
+    font-size: 15px;
+    margin: 0;
+  }
+  .lede + .lede { margin-top: .6rem; }
+  .lede a { color: var(--primary); }
+
+  h2 {
+    font-size: 17px;
+    letter-spacing: -.01em;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: baseline;
+    gap: .6rem;
+  }
+  h2 .idx {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .section { margin-top: clamp(2.2rem, 5vw, 3.4rem); }
+  .section > p.note {
+    color: var(--muted); font-size: 15px; margin: .5rem 0 0; max-width: 70ch;
+  }
+  .section > p.note code, p.note code {
+    font-family: var(--mono); font-size: 13px; color: var(--ink);
+    background: var(--surface-2); padding: .05rem .3rem; border-radius: 4px;
+  }
+
+  hr.rule { border: 0; border-top: 1px solid var(--line); margin: 2.6rem 0 0; }
+
+  /* ---- legend ---- */
+  .legend { display: flex; flex-wrap: wrap; gap: .5rem .9rem; margin-top: 1.1rem; }
+  .legend .item {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: normal;
+  }
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex: none;
+  }
+
+  /* ---- inventory grid ---- */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+    gap: 1rem;
+    margin-top: 1.3rem;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 1.05rem 1.1rem 1.15rem;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: .55rem;
+  }
+  .chip {
+    align-self: flex-start;
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: .3rem .6rem;
+    border-radius: 999px;
+    line-height: 1;
+  }
+  .card .file {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    margin: -.1rem 0 .2rem;
+    overflow-wrap: anywhere;
+  }
+  .cls {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: -.01em;
+  }
+  .card ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .5rem; }
+  .card li { display: flex; flex-direction: column; gap: .12rem; }
+  .card li .m {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .card li .d {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+
+  /* role color helpers */
+  .r-model  { color: var(--c-model); }
+  .r-store  { color: var(--c-store); }
+  .r-convert{ color: var(--c-convert); }
+  .r-api    { color: var(--primary); }
+  .r-spec   { color: var(--c-spec); }
+  .r-stop   { color: var(--c-stop); }
+  .chip.model  { color: var(--c-model);  background: color-mix(in srgb, var(--c-model) 15%, var(--surface)); }
+  .chip.store  { color: var(--c-store);  background: color-mix(in srgb, var(--c-store) 15%, var(--surface)); }
+  .chip.convert{ color: var(--c-convert);background: color-mix(in srgb, var(--c-convert) 16%, var(--surface)); }
+  .chip.api    { color: var(--c-api);    background: color-mix(in srgb, var(--c-api) 15%, var(--surface)); }
+  .chip.spec   { color: var(--c-spec);   background: color-mix(in srgb, var(--c-spec) 14%, var(--surface)); }
+  .dot.model{ background: var(--c-model);} .dot.store{ background: var(--c-store);}
+  .dot.convert{ background: var(--c-convert);} .dot.api{ background: var(--c-api);}
+  .dot.spec{ background: var(--c-spec);} .dot.stop{ background: var(--c-stop);}
+
+  /* ---- lifecycle ---- */
+  .states { display: flex; flex-wrap: wrap; align-items: stretch; gap: .5rem; margin-top: 1.3rem; }
+  .state {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    padding: .6rem .75rem .65rem;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    min-width: 0;
+    flex: 1 1 168px;
+  }
+  .state .nm {
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .state .dd {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+  .state.s-wait { border-color: color-mix(in srgb, var(--c-convert) 34%, var(--line)); background: color-mix(in srgb, var(--c-convert) 8%, var(--surface)); }
+  .state.s-run  { border-color: color-mix(in srgb, var(--c-model) 34%, var(--line)); background: color-mix(in srgb, var(--c-model) 8%, var(--surface)); }
+  .state.s-done { border-color: color-mix(in srgb, var(--c-store) 32%, var(--line)); background: color-mix(in srgb, var(--c-store) 7%, var(--surface)); }
+  .state.s-fail { border-color: color-mix(in srgb, var(--c-stop) 34%, var(--line)); background: color-mix(in srgb, var(--c-stop) 8%, var(--surface)); }
+  .arrow { align-self: center; font-family: var(--mono); color: var(--muted); font-size: 14px; flex: none; }
+
+  .endstates { margin-top: 1.2rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: .45rem .9rem; }
+  .endstates div {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .endstates .m {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--ink);
+  }
+
+  /* ---- flow lanes ---- */
+  .flows { display: grid; grid-template-columns: 1fr 1fr; gap: 1.6rem; margin-top: 1.4rem; align-items: start; }
+  .flow {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 1.3rem 1.25rem 1.5rem;
+    box-shadow: var(--shadow);
+  }
+  .flow h3 {
+    margin: 0 0 .2rem;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+  }
+  .flow .sub {
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0 0 1.1rem;
+  }
+  .lane { display: flex; flex-direction: column; align-items: stretch; }
+
+  .node {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    padding: .7rem .8rem .75rem;
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+  }
+  .node.tint-model  { background: color-mix(in srgb, var(--c-model) 8%, var(--surface)); border-color: color-mix(in srgb, var(--c-model) 30%, var(--line)); }
+  .node.tint-store  { background: color-mix(in srgb, var(--c-store) 8%, var(--surface)); border-color: color-mix(in srgb, var(--c-store) 30%, var(--line)); }
+  .node.tint-convert{ background: color-mix(in srgb, var(--c-convert) 9%, var(--surface)); border-color: color-mix(in srgb, var(--c-convert) 34%, var(--line)); }
+  .node.tint-api    { background: color-mix(in srgb, var(--c-api) 8%, var(--surface)); border-color: color-mix(in srgb, var(--c-api) 30%, var(--line)); }
+  .node .head { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+  .node .actor {
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  .node .call {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    word-break: break-word;
+  }
+  .node .desc {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+  .node.cond .actor::after { content: " · conditional"; color: var(--muted); font-weight: 500; }
+
+  .conn { display: flex; flex-direction: column; align-items: center; padding: .1rem 0; gap: .12rem; }
+  .conn .lbl {
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    max-width: 92%;
+    letter-spacing: normal;
+  }
+  .conn .bar { width: 2px; height: 9px; background: var(--line); }
+  .conn .tip { font-size: 12px; color: var(--muted); line-height: .6; margin-top: -2px; }
+
+  .flow .foot {
+    margin-top: 1.1rem;
+    padding-top: .9rem;
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+  .flow .foot .m { font-family: var(--mono); color: var(--ink); }
+
+  /* ---- payload token ---- */
+  .msg-token {
+    border: 1px dashed color-mix(in srgb, var(--c-spec) 45%, var(--line));
+    border-radius: 8px;
+    background: var(--surface-2);
+    padding: .65rem .8rem;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.55;
+    overflow-x: auto;
+  }
+  .msg-token b { color: var(--ink); font-weight: 600; }
+  .msg-token .cm { color: color-mix(in srgb, var(--muted) 75%, var(--bg)); }
+
+  .pairs { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; margin-top: 1.3rem; align-items: start; }
+  .pair { display: flex; flex-direction: column; gap: .5rem; }
+  .pair h3 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+  .pair p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+  /* ---- walkthrough ---- */
+  .walk {
+    margin-top: 1.4rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .walk-bar {
+    display: flex; align-items: center; gap: .7rem; flex-wrap: wrap;
+    padding: .85rem 1.1rem; border-bottom: 1px solid var(--line); background: var(--surface-2);
+  }
+  .walk-bar button {
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: .38rem .7rem;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .walk-bar button:hover:not(:disabled) { border-color: var(--c-api); color: var(--primary); }
+  .walk-bar button:disabled { opacity: .4; cursor: default; }
+  .walk-count {
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .ticks { display: flex; gap: .28rem; margin-left: auto; flex-wrap: wrap; }
+  .ticks button {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border-radius: 999px;
+    font-size: 13px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    font-family: var(--sans);
+  }
+  .ticks button[aria-current="true"] { background: var(--c-api); border-color: var(--c-api); color: #fff; }
+
+  .walk-body { display: grid; grid-template-columns: 1.35fr 1fr; gap: 0; min-height: 27rem; }
+  .walk-main { padding: 1.1rem 1.15rem 1.3rem; display: flex; flex-direction: column; gap: .75rem; min-width: 0; }
+  .walk-side {
+    padding: 1.1rem 1.15rem 1.3rem; border-left: 1px solid var(--line);
+    background: var(--surface-2); display: flex; flex-direction: column; gap: .9rem; min-width: 0;
+  }
+  .walk-step {
+    font-size: 15px;
+    font-weight: 640;
+    letter-spacing: -.01em;
+    margin: 0;
+    text-wrap: balance;
+    border-radius: 10px;
+  }
+  .walk-why {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+    margin: 0;
+  }
+  .reqline {
+    display: flex;
+    align-items: baseline;
+    gap: .5rem;
+    flex-wrap: wrap;
+    font-family: var(--mono);
+    font-size: 12px;
+    border-radius: 8px;
+  }
+  .verb {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    padding: .24rem .45rem;
+    border-radius: 6px;
+    line-height: 1;
+    flex: none;
+    font-family: var(--mono);
+  }
+  .verb.get  { color: var(--c-model); background: color-mix(in srgb, var(--c-model) 15%, var(--surface)); }
+  .verb.post { color: var(--c-api);   background: color-mix(in srgb, var(--c-api) 15%, var(--surface)); }
+  .reqline .path { color: var(--ink); word-break: break-all; }
+  .statusline {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .code2xx { color: var(--c-model); font-weight: 700; }
+  .lbl-sm {
+    font-family: var(--sans);
+    font-size: 12px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .statepanel {
+    display: flex;
+    flex-direction: column;
+    gap: .55rem;
+    border-radius: 10px;
+  }
+  .srow { display: flex; align-items: baseline; justify-content: space-between; gap: .7rem; }
+  .srow .k {
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .srow .v {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    word-break: break-word;
+  }
+  .srow .v.changed { color: var(--c-api); font-weight: 700; }
+  .pill {
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    padding: .2rem .42rem;
+    border-radius: 999px;
+    line-height: 1;
+    display: inline-block;
+  }
+  .pill.s-wait { color: var(--c-convert); background: color-mix(in srgb, var(--c-convert) 16%, var(--surface)); }
+  .pill.s-run  { color: var(--c-model);   background: color-mix(in srgb, var(--c-model) 16%, var(--surface)); }
+  .pill.s-done { color: var(--c-store);   background: color-mix(in srgb, var(--c-store) 16%, var(--surface)); }
+  .walk-note {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+    border-top: 1px solid var(--line);
+    padding-top: .7rem;
+    margin: 0;
+    border-radius: 8px;
+  }
+  .walk-note strong { color: var(--ink); font-weight: 620; }
+
+  /* ---- tables ---- */
+  .tablewrap {
+    overflow-x: auto;
+    margin-top: 1.3rem;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  table { border-collapse: collapse; width: 100%; min-width: 760px; }
+  th, td { text-align: left; padding: .6rem .85rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th {
+    font-family: var(--sans);
+    font-size: 12px;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.ep { font-family: var(--mono); font-size: 12px; color: var(--ink); white-space: nowrap; }
+  td.pu { font-size: 13px; color: var(--muted); line-height: 1.45; }
+  td.st { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  td.auth { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .status-code { font-family: var(--mono); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  /* ---- callouts ---- */
+  .callouts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-top: 1.3rem; }
+  .callout { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.05rem; box-shadow: var(--shadow); }
+  .callout h4 { margin: 0 0 .4rem; font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+  .callout p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .callout p + p { margin-top: .5rem; }
+  .callout code { font-family: var(--mono); font-size: 13px; color: var(--ink); background: var(--surface-2); padding: .05rem .3rem; border-radius: 4px; }
+
+  footer.foot-note {
+    margin-top: 2.6rem; font-family: var(--mono); font-size: 11px;
+    color: var(--muted); letter-spacing: .02em; line-height: 1.6;
+  }
+  footer.foot-note a { color: var(--primary); }
+
+  @media (max-width: 860px) {
+    .walk-body { grid-template-columns: 1fr; }
+    .walk-side { border-left: 0; border-top: 1px solid var(--line); }
+  }
+  @media (max-width: 760px) {
+    .flows, .pairs { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="page">
+  <div class="wrap">
+
+    <header>
+      <p class="eyebrow">Interpersonal Transaction Protocol · API v1 · ITP schema 0.2</p>
+      <h1>How an interaction runs through the ITP API</h1>
+      <p class="lede">A JavaScript application runs an interaction between two agents, each of which is either a human participant or a formal model. The server owns the interaction: it decides whose turn it is, runs the model agents, validates every state vector, and hands each client the experience its partner produced.</p>
+      <p class="lede">This maps that to the endpoints, the modules, and the rules they keep. The in-process flow between two formal models is the companion document, <a href="itp-communication-flow.html">itp-communication-flow.html</a>.</p>
+
+      <div class="legend" aria-label="Role colors">
+        <span class="item"><span class="dot api"></span>API layer</span>
+        <span class="item"><span class="dot model"></span>Formal model</span>
+        <span class="item"><span class="dot store"></span>Communication session</span>
+        <span class="item"><span class="dot convert"></span>Converter / schema</span>
+        <span class="item"><span class="dot spec"></span>Protocol / helpers</span>
+        <span class="item"><span class="dot stop"></span>Failure</span>
+      </div>
+    </header>
+
+    <hr class="rule" />
+
+    <!-- ============ 01 ELEMENTS ============ -->
+    <section class="section">
+      <h2><span class="idx">01</span> Main elements</h2>
+      <p class="note">Nine modules under <code>src/API/</code>. The HTTP layer holds no interaction state: everything stateful sits in <code>Interaction</code> and <code>InteractionRegistry</code>, which is why the turn rules can be tested without a server.</p>
+
+      <div class="grid">
+
+        <div class="card">
+          <span class="chip api">HTTP</span>
+          <span class="cls r-api">APISpecification</span>
+          <span class="file">src/API/APISpecification.py</span>
+          <ul>
+            <li><span class="m">10 routes under /api/v1</span><span class="d">Routing only — no lifecycle logic lives here.</span></li>
+            <li><span class="m">authenticate</span><span class="d">Bearer token → TokenScope (interaction + bound agent).</span></li>
+            <li><span class="m">poll_perception</span><span class="d">Long polling; every interaction read runs in a worker thread.</span></li>
+            <li><span class="m">CORS · error handlers</span><span class="d">Vite dev origins; every error rendered as problem+json.</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="chip api">Core</span>
+          <span class="cls r-api">Interaction</span>
+          <span class="file">src/API/Interaction.py</span>
+          <ul>
+            <li><span class="m">start_if_ready</span><span class="d">Every human registered → running, turn 1.</span></li>
+            <li><span class="m">submit_action</span><span class="d">Replay check, turn check, schema check, then apply.</span></li>
+            <li><span class="m">poll_perception</span><span class="d">Cursor-driven; never consumes a perception.</span></li>
+            <li><span class="m">_run_model_agents</span><span class="d">Plays formal model agents the moment it is their turn.</span></li>
+            <li><span class="m">end · describe_results</span><span class="d">Idempotent termination; the recorded turns.</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="chip api">State</span>
+          <span class="cls r-api">InteractionRegistry</span>
+          <span class="file">src/API/InteractionRegistry.py</span>
+          <ul>
+            <li><span class="m">create_interaction</span><span class="d">Interaction, token and invitation code in one lock.</span></li>
+            <li><span class="m">join_interaction</span><span class="d">Redeem, register and invalidate atomically.</span></li>
+            <li><span class="m">resolve_token · bind_token_to_agent</span><span class="d">Hashed tokens; a token binds to the agent it registered.</span></li>
+            <li><span class="m">client_requests</span><span class="d">clientRequestId scoped to payload and source.</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="chip convert">Schema</span>
+          <span class="cls r-convert">StateSpaceSchema</span>
+          <span class="file">src/API/StateSpaceSchema.py</span>
+          <ul>
+            <li><span class="m">from_state_space</span><span class="d">Reads the IBSSS description in schema/.</span></li>
+            <li><span class="m">_compile_json_schema</span><span class="d">Description → validating draft-2020-12 JSON Schema.</span></li>
+            <li><span class="m">validate_vector</span><span class="d">Schema, then the geometry JSON Schema cannot express.</span></li>
+            <li><span class="m">describe</span><span class="d">What GET /models/{id} serves to a client.</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="chip model">Models</span>
+          <span class="cls r-model">ModelCatalogue</span>
+          <span class="file">src/API/ModelCatalogue.py</span>
+          <ul>
+            <li><span class="m">ModelEntry</span><span class="d">id, version, status, agent types, constraints, factory.</span></li>
+            <li><span class="m">create_model</span><span class="d">A fresh instance per agent, id = agent id.</span></li>
+            <li><span class="m">dummy-ipc · dummy-sasb · lassi</span><span class="d">What run_model_api serves.</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="chip api">Access</span>
+          <span class="cls r-api">Invitation</span>
+          <span class="file">src/API/Invitation.py</span>
+          <ul>
+            <li><span class="m">make_invitation_code</span><span class="d">Six digits from secrets, unique among active.</span></li>
+            <li><span class="m">hash_secret</span><span class="d">Codes and tokens stored as SHA-256 only.</span></li>
+            <li><span class="m">JoinRateLimiter</span><span class="d">Failed attempts per source, client, code, and overall.</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="chip spec">Errors</span>
+          <span class="cls r-spec">APIProblem</span>
+          <span class="file">src/API/APIProblem.py</span>
+          <ul>
+            <li><span class="m">ProblemDetail</span><span class="d">Every error in the API is one of these.</span></li>
+            <li><span class="m">PROBLEM_TYPES</span><span class="d">Slug → status + title, in one table.</span></li>
+            <li><span class="m">make_problem_response</span><span class="d">RFC 9457 document + requestId + Retry-After.</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="chip spec">Payloads</span>
+          <span class="cls r-spec">APIModels</span>
+          <span class="file">src/API/APIModels.py</span>
+          <ul>
+            <li><span class="m">Request models</span><span class="d">camelCase, extra="forbid" — unknown keys are 400.</span></li>
+            <li><span class="m">Response models</span><span class="d">Attached for documentation; nothing is filtered out.</span></li>
+            <li><span class="m">/docs</span><span class="d">OpenAPI with payload schemas to type against.</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <span class="chip api">Client</span>
+          <span class="cls r-api">APIClient</span>
+          <span class="file">src/API/APIClient.py</span>
+          <ul>
+            <li><span class="m">create_interaction · join_interaction</span><span class="d">Stores the returned token on the client.</span></li>
+            <li><span class="m">poll_perception · submit_action</span><span class="d">The loop a browser runs around a human.</span></li>
+            <li><span class="m">APIError</span><span class="d">Carries the parsed problem document, not a bare code.</span></li>
+          </ul>
+        </div>
+
+      </div>
+    </section>
+
+    <hr class="rule" />
+
+    <!-- ============ 02 STATES ============ -->
+    <section class="section">
+      <h2><span class="idx">02</span> Interaction states</h2>
+      <p class="note">The server is the authority on the state and the turn number. An interaction with two formal model agents needs no registration and runs to completion inside the creation request; one with a human agent waits until every human has registered.</p>
+
+      <div class="states">
+        <div class="state s-wait">
+          <span class="nm r-convert">waitingForRegistration</span>
+          <span class="dd">Created. One or more human agents have not registered yet.</span>
+        </div>
+        <span class="arrow" aria-hidden="true">→</span>
+        <div class="state s-run">
+          <span class="nm r-model">running</span>
+          <span class="dd">Turn 1 onward. <code>activeAgentIds</code> names who must act.</span>
+        </div>
+        <span class="arrow" aria-hidden="true">→</span>
+        <div class="state s-done">
+          <span class="nm r-store">completed</span>
+          <span class="dd">numberOfTurns reached. The normal ending.</span>
+        </div>
+        <div class="state s-done">
+          <span class="nm r-store">terminated</span>
+          <span class="dd">A client called <code>/end</code> before the last turn.</span>
+        </div>
+        <div class="state s-fail">
+          <span class="nm r-stop">failed</span>
+          <span class="dd">A model raised, or produced a vector outside its own state space.</span>
+        </div>
+      </div>
+
+      <p class="note" style="margin-top:1.1rem;">The specification also defines <code>ready</code> and <code>expired</code>. Interactions move from <code>waitingForRegistration</code> straight to <code>running</code>, which the specification permits, and nothing expires an interaction yet — there is no reaper and no interaction lifetime.</p>
+
+      <div class="endstates">
+        <div><span class="m">numberOfTurnsReached</span> — the interaction played every turn it was created with.</div>
+        <div><span class="m">terminatedByClient</span> — a client called <code>POST /end</code>.</div>
+        <div><span class="m">modelFailure</span> — a formal model raised, or left its own state space.</div>
+        <div><span class="m">serverError</span> — a converted vector left the target state space.</div>
+        <div><span class="m">participantDisconnected · registrationTimeout · interactionExpired</span> — defined, not yet raised.</div>
+      </div>
+    </section>
+
+    <hr class="rule" />
+
+    <!-- ============ 03 TURN ENGINE ============ -->
+    <section class="section">
+      <h2><span class="idx">03</span> The turn engine</h2>
+      <p class="note">Interactions are alternating: <strong>one turn is one action slot with exactly one acting agent</strong>, which is what <code>activeAgentIds</code> and the results representation describe. <code>numberOfTurns</code> therefore counts single actions, not exchanges — a four-turn interaction is four behaviors, two from each agent.</p>
+
+      <div class="flows">
+
+        <div class="flow">
+          <h3>What one submitted behavior does</h3>
+          <p class="sub">Interaction.submit_action → _apply_behavior</p>
+          <div class="lane">
+
+            <div class="node tint-api">
+              <div class="head"><span class="actor r-api">Interaction</span></div>
+              <span class="call">replay · turn · agent · schema checks</span>
+              <span class="desc">A repeated actionId returns the original response. A wrong turn, the wrong agent, or a vector the state space rejects never reaches the model.</span>
+            </div>
+            <div class="conn"><span class="lbl">valid behavior</span><span class="bar"></span><span class="tip">▼</span></div>
+
+            <div class="node tint-store">
+              <div class="head"><span class="actor r-store">Communication</span></div>
+              <span class="call">receive_message(ITP message)</span>
+              <span class="desc">The bare vector is wrapped into a full ITP message — source, target, timecode, context, metadata — and stored.</span>
+            </div>
+            <div class="conn"><span class="lbl">values.state_space ≠ target.state_space?</span><span class="bar"></span><span class="tip">▼</span></div>
+
+            <div class="node tint-convert cond">
+              <div class="head"><span class="actor r-convert">ConverterRegistry</span></div>
+              <span class="call">convert_message → validate_vector</span>
+              <span class="desc">Converted into the partner's state space, stored alongside the original, then validated against the partner's schema. A vector that left the target space fails the interaction rather than reaching a client.</span>
+            </div>
+            <div class="conn"><span class="lbl">deliver</span><span class="bar"></span><span class="tip">▼</span></div>
+
+            <div class="node tint-model">
+              <div class="head"><span class="actor r-model">Partner</span></div>
+              <span class="call">perception · from_message</span>
+              <span class="desc">A perception is queued for the partner at the next cursor. If the partner is a formal model, the message is also integrated through from_message.</span>
+            </div>
+            <div class="conn"><span class="lbl">turn + 1, partner becomes active</span><span class="bar"></span><span class="tip">▼</span></div>
+
+            <div class="node tint-api">
+              <div class="head"><span class="actor r-api">Interaction</span></div>
+              <span class="call">_run_model_agents</span>
+              <span class="desc">While the newly active agent is a formal model, the server plays it immediately and repeats this whole column. A human therefore always finds a perception waiting.</span>
+            </div>
+
+          </div>
+          <p class="foot">On the last turn the interaction completes instead of advancing, and the final perception is still queued — <span class="m">interactionEnded</span> follows only once the client's cursor has passed it.</p>
+        </div>
+
+        <div class="flow">
+          <h3>What the client loop looks like</h3>
+          <p class="sub">one browser, one agent, until the interaction ends</p>
+          <div class="lane">
+
+            <div class="node tint-api">
+              <div class="head"><span class="actor r-api">Client</span></div>
+              <span class="call">GET .../perception?after={cursor}&amp;wait=25</span>
+              <span class="desc">Held open until something arrives or the deadline passes, capped at 30 s. Polling never consumes: the same request returns the same perception until the cursor advances.</span>
+            </div>
+            <div class="conn"><span class="lbl">four possible states</span><span class="bar"></span><span class="tip">▼</span></div>
+
+            <div class="node tint-convert">
+              <div class="head"><span class="actor r-convert">pending</span></div>
+              <span class="call">nothing new</span>
+              <span class="desc">Carries retryAfterMilliseconds. Poll again with the same cursor.</span>
+            </div>
+            <div class="conn"><span class="bar"></span><span class="tip">▼</span></div>
+
+            <div class="node tint-model">
+              <div class="head"><span class="actor r-model">actionRequired</span></div>
+              <span class="call">act, nothing to perceive</span>
+              <span class="desc">The opening agent of the interaction. There is no partner behavior yet, and inventing an opening state vector is not an option, so this state says "act" without an experience.</span>
+            </div>
+            <div class="conn"><span class="bar"></span><span class="tip">▼</span></div>
+
+            <div class="node tint-store">
+              <div class="head"><span class="actor r-store">perceivable</span></div>
+              <span class="call">experience + actionRequired</span>
+              <span class="desc">Carries the partner's behavior in this agent's state space. Read turn from it and send that turn back with the action.</span>
+            </div>
+            <div class="conn"><span class="bar"></span><span class="tip">▼</span></div>
+
+            <div class="node tint-api">
+              <div class="head"><span class="actor r-api">interactionEnded</span></div>
+              <span class="call">finalTurn + endReason</span>
+              <span class="desc">Only after every queued perception has been read. Stop polling.</span>
+            </div>
+
+          </div>
+          <p class="foot">Advance <span class="m">after</span> to the <span class="m">cursor</span> of the perception you just handled. Cursors are monotonic per interaction, so they also tell a reconnecting client what it missed.</p>
+        </div>
+
+      </div>
+    </section>
+
+    <hr class="rule" />
+
+    <!-- ============ 04 WALKTHROUGH ============ -->
+    <section class="section">
+      <h2><span class="idx">04</span> Walk one interaction</h2>
+      <p class="note">A four-turn interaction between a participant (agent A) and a <code>dummy-ipc</code> model (agent B), captured from a real run against the API. Step through it and watch the turn counter: the participant acts twice, and the server plays the model's two turns without being asked.</p>
+
+      <div class="walk">
+        <div class="walk-bar">
+          <button type="button" id="walk-prev">◀ prev</button>
+          <button type="button" id="walk-next">next ▶</button>
+          <span class="walk-count">step <span id="walk-n">1</span> of 10</span>
+          <div class="ticks" id="walk-ticks" role="group" aria-label="Jump to step"></div>
+        </div>
+
+        <div class="walk-body">
+          <div class="walk-main">
+            <p class="walk-step" id="walk-title">Fetch the model and its state space schema</p>
+            <p class="walk-why" id="walk-why">Every interaction is bound to an exact model id and version. The model's stateSpaceSchema validates both the behavior the client submits and the experience it receives.</p>
+
+            <div class="reqline">
+              <span class="verb get" id="walk-verb">GET</span>
+              <span class="path" id="walk-path">/api/v1/models/dummy-ipc</span>
+            </div>
+
+            <div id="walk-reqbox" hidden>
+              <p class="lbl-sm">request</p>
+              <div class="msg-token" id="walk-req"></div>
+            </div>
+
+            <div class="statusline">
+              <span class="code2xx" id="walk-status">200</span>
+              <span id="walk-statustext">OK</span>
+            </div>
+            <div class="msg-token" id="walk-res"></div>
+          </div>
+
+          <div class="walk-side">
+            <div>
+              <p class="lbl-sm" style="margin:0 0 .55rem;">server state after this step</p>
+              <div class="statepanel">
+                <div class="srow"><span class="k">status</span><span class="v"><span class="pill s-wait" id="walk-st-status">—</span></span></div>
+                <div class="srow"><span class="k">currentTurn</span><span class="v" id="walk-st-turn">—</span></div>
+                <div class="srow"><span class="k">activeAgentIds</span><span class="v" id="walk-st-active">—</span></div>
+                <div class="srow"><span class="k">A's cursor</span><span class="v" id="walk-st-cursor">—</span></div>
+              </div>
+            </div>
+            <p class="walk-note" id="walk-note"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule" />
+
+    <!-- ============ 05 ENDPOINTS ============ -->
+    <section class="section">
+      <h2><span class="idx">05</span> Endpoints</h2>
+      <p class="note">Base path <code>/api/v1</code>, JSON in and out, camelCase property names, ISO 8601 UTC timestamps. <span class="r-api" style="font-family:var(--mono);font-size:.82rem;">bearer</span> marks the endpoints that need <code>Authorization: Bearer &lt;interactionToken&gt;</code>.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr><th>Method</th><th>Endpoint</th><th>Purpose</th><th>Auth</th><th>Success</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="st r-model">GET</td><td class="ep">/models</td><td class="pu">The models available for new interactions.</td><td class="auth">—</td><td class="st">200</td></tr>
+            <tr><td class="st r-model">GET</td><td class="ep">/models/{modelId}</td><td class="pu">Model definition and the shared <code>stateSpaceSchema</code>.</td><td class="auth">—</td><td class="st">200</td></tr>
+            <tr><td class="st r-api">POST</td><td class="ep">/interactions</td><td class="pu">Create an interaction. Returns the token, and an invitation code when a second human must join.</td><td class="auth">—</td><td class="st">201</td></tr>
+            <tr><td class="st r-api">POST</td><td class="ep">/interactions/join</td><td class="pu">Redeem a six-digit code, register the invited participant, receive a token.</td><td class="auth">—</td><td class="st">200</td></tr>
+            <tr><td class="st r-model">GET</td><td class="ep">/interactions/{sessionId}</td><td class="pu">Status, turn, active agents, invitation status without the code.</td><td class="auth r-api">bearer</td><td class="st">200</td></tr>
+            <tr><td class="st r-api">POST</td><td class="ep">/interactions/{sessionId}/agents/{agentId}/register</td><td class="pu">Register a participant that already holds the token.</td><td class="auth r-api">bearer</td><td class="st">200</td></tr>
+            <tr><td class="st r-model">GET</td><td class="ep">/interactions/{sessionId}/agents/{agentId}/perception</td><td class="pu">Poll for a perception. <code>after</code> and <code>wait</code> give cursor-based long polling.</td><td class="auth r-api">bearer</td><td class="st">200</td></tr>
+            <tr><td class="st r-api">POST</td><td class="ep">/interactions/{sessionId}/agents/{agentId}/actions</td><td class="pu">Submit a behavior for a turn. Idempotent on <code>actionId</code>.</td><td class="auth r-api">bearer</td><td class="st">202</td></tr>
+            <tr><td class="st r-api">POST</td><td class="ep">/interactions/{sessionId}/end</td><td class="pu">Terminate before the last turn. Idempotent.</td><td class="auth r-api">bearer</td><td class="st">200</td></tr>
+            <tr><td class="st r-model">GET</td><td class="ep">/interactions/{sessionId}/results</td><td class="pu">The recorded turns and the ITP messages behind them.</td><td class="auth r-api">bearer</td><td class="st">200</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="note" style="margin-top:1.2rem;">Errors are <code>application/problem+json</code> (RFC 9457) with a <code>type</code>, <code>title</code>, <code>status</code>, <code>detail</code>, <code>instance</code> and <code>requestId</code>; schema violations add an <code>errors</code> array of <code>{path, code, message}</code>.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Status</th><th>When</th></tr></thead>
+          <tbody>
+            <tr><td class="st"><span class="status-code r-convert">400</span></td><td class="pu">Malformed request, unknown property, unparseable cursor.</td></tr>
+            <tr><td class="st"><span class="status-code r-convert">401</span></td><td class="pu">Interaction token missing or invalid.</td></tr>
+            <tr><td class="st"><span class="status-code r-convert">403</span></td><td class="pu">Token issued for a different agent; or a behavior submitted for a formal model agent.</td></tr>
+            <tr><td class="st"><span class="status-code r-convert">404</span></td><td class="pu">Unknown model, interaction, agent, or invitation code.</td></tr>
+            <tr><td class="st"><span class="status-code r-convert">409</span></td><td class="pu">Wrong turn, agent not expected to act, already acted, actionId reused with different content, invitation already used, registration for a different participant.</td></tr>
+            <tr><td class="st"><span class="status-code r-convert">410</span></td><td class="pu">Invitation expired; or results discarded because persistence was disabled.</td></tr>
+            <tr><td class="st"><span class="status-code r-convert">422</span></td><td class="pu">State vector fails the stateSpaceSchema, or the configuration violates the model constraints.</td></tr>
+            <tr><td class="st"><span class="status-code r-convert">429</span></td><td class="pu">Too many failed invitation attempts. Carries <code>retryAfterSeconds</code>.</td></tr>
+            <tr><td class="st"><span class="status-code r-stop">500</span></td><td class="pu">A formal model failed. The interaction ends with <code>modelFailure</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <hr class="rule" />
+
+    <!-- ============ 06 WIRE FORMAT ============ -->
+    <section class="section">
+      <h2><span class="idx">06</span> What crosses the wire, and what is kept</h2>
+      <p class="note">The client sends and receives bare state vectors. The ITP message is built on the server, so the browser never assembles <code>source_agent</code>, <code>target_agent</code> or a timecode — and the interaction still produces the same record as one driven by the local runner.</p>
+
+      <div class="pairs">
+        <div class="pair">
+          <h3 class="r-api">On the wire</h3>
+          <p>What a client posts, and what it reads back. The vector is validated against the model's <code>stateSpaceSchema</code> in both directions.</p>
+          <div class="msg-token">
+            <span class="cm">// POST .../agents/{agentId}/actions</span><br>
+            {<br>
+            &nbsp;&nbsp;<b>actionId</b>: "client-action-1",<br>
+            &nbsp;&nbsp;<b>turn</b>: 1,<br>
+            &nbsp;&nbsp;<b>behavior</b>: { Theta: 90.0, R: 0.6 }<br>
+            }
+          </div>
+          <div class="msg-token">
+            <span class="cm">// GET .../agents/{agentId}/perception</span><br>
+            {<br>
+            &nbsp;&nbsp;<b>state</b>: "perceivable",<br>
+            &nbsp;&nbsp;<b>sessionStatus</b>: "running",<br>
+            &nbsp;&nbsp;<b>perceptionId</b>: "d87a225a-…",<br>
+            &nbsp;&nbsp;<b>cursor</b>: "3",<br>
+            &nbsp;&nbsp;<b>turn</b>: 3,<br>
+            &nbsp;&nbsp;<b>actionRequired</b>: true,<br>
+            &nbsp;&nbsp;<b>experience</b>: { Theta: 17.99950146779014,<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R: 0.4172976538233931 },<br>
+            &nbsp;&nbsp;<b>sourceAgentId</b>: "9b579baa-…"<br>
+            }
+          </div>
+        </div>
+
+        <div class="pair">
+          <h3 class="r-store">Kept on the server</h3>
+          <p>The ITP message the action above became, stored in the interaction's <code>Communication</code> and returned by <code>/results</code> under <code>itpMessages</code>.</p>
+          <div class="msg-token">
+            {<br>
+            &nbsp;&nbsp;<b>schema_version</b>: "0.2",<br>
+            &nbsp;&nbsp;<b>source_agent</b>: { id: "ec554a99-…", state_space: "ipc",<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;analysis_unit: "monadic" },<br>
+            &nbsp;&nbsp;<b>target_agent</b>: { id: "9b579baa-…", state_space: "ipc",<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;analysis_unit: "monadic" },<br>
+            &nbsp;&nbsp;<b>timecode</b>: { timestamp: "1:01", interaction_turn: 1,<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>api_turn</b>: 1, <b>iso_timestamp</b>: "2026-…Z" },<br>
+            &nbsp;&nbsp;<b>values</b>: { state_space: "ipc", analysis_unit: "monadic",<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>data</b>: { Theta: 90.0, R: 0.6 } },<br>
+            &nbsp;&nbsp;<b>context</b>: "workplace_colleague_conversation",<br>
+            &nbsp;&nbsp;<b>metadata</b>: { session_id, agent_role: "A",<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agent_type: "human" }<br>
+            }
+          </div>
+          <p>One API turn maps onto the ITP timecode as <code>interaction_turn = (turn + 1) // 2</code> and <code>message_index = 2 - (turn % 2)</code>, so API turns 1 and 2 are the two messages of ITP interaction turn 1.</p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule" />
+
+    <!-- ============ 07 ACCESS ============ -->
+    <section class="section">
+      <h2><span class="idx">07</span> Tokens and invitation codes</h2>
+      <p class="note">Every interaction issues its own tokens, and a code exists only when a second human participant has to join from another browser.</p>
+
+      <div class="callouts">
+        <div class="callout">
+          <h4 class="r-api">One token per client, bound to an agent</h4>
+          <p>Creating an interaction issues a token; joining issues a second one. Both are stored as SHA-256 hashes against a session id.</p>
+          <p>A token becomes <em>bound</em> to the agent it registers. A bound token may poll and act only for its own agent — addressing the other is <code>403</code>. Reading status and ending the interaction stay open to either client.</p>
+        </div>
+        <div class="callout">
+          <h4 class="r-convert">The six-digit code</h4>
+          <p>Generated with <code>secrets</code>, unique among active invitations, bound to one interaction and one agent, single use, expiring after 30 minutes, and stored only as a hash.</p>
+          <p>It is disclosed exactly once, in the creation response. <code>GET /interactions/{id}</code> returns its status but never the code again.</p>
+        </div>
+        <div class="callout">
+          <h4 class="r-stop">Why the join endpoint is rate-limited</h4>
+          <p>Six digits is a million possibilities, which is not many. Failed attempts are counted in a 60-second window per source address, per client id, per code, and overall, and a client over the limit gets <code>429</code> with <code>retryAfterSeconds</code>.</p>
+        </div>
+        <div class="callout">
+          <h4 class="r-spec">clientRequestId is scoped</h4>
+          <p>The creation response carries a token, so replaying it to anyone who repeats the identifier would hand out another client's access. A replay must match the exact payload <em>and</em> the source address; anything else is <code>409</code>.</p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="rule" />
+
+    <!-- ============ 08 INVARIANTS ============ -->
+    <section class="section">
+      <h2><span class="idx">08</span> Rules the API keeps</h2>
+      <div class="callouts">
+        <div class="callout">
+          <h4 class="r-api">The server owns the turn</h4>
+          <p>Clients never decide whose turn it is. They read <code>turn</code> from a perception and send it back; a mismatch is <code>409</code>. Each agent submits at most one behavior per turn.</p>
+        </div>
+        <div class="callout">
+          <h4 class="r-convert">Every vector is validated, both ways</h4>
+          <p>Submitted behaviors and returned experiences are checked against the same compiled <code>stateSpaceSchema</code>, geometry included. A model that leaves its own state space fails the interaction rather than emitting an invalid state.</p>
+        </div>
+        <div class="callout">
+          <h4 class="r-model">Model agents are the server's to run</h4>
+          <p>They are registered and executed internally, never driven by a client. Submitting a behavior for one is <code>403</code>.</p>
+        </div>
+        <div class="callout">
+          <h4 class="r-store">Polling is safe to repeat</h4>
+          <p>A <code>GET</code> never consumes a perception. The same request returns the same perception until the client advances its cursor, so a dropped response costs nothing.</p>
+        </div>
+        <div class="callout">
+          <h4 class="r-spec">Actions are idempotent, per agent</h4>
+          <p><code>actionId</code> is scoped to the agent that sent it, so two clients using counter-style ids do not collide. A retry with the same content returns the original response; different content is <code>409</code>.</p>
+        </div>
+        <div class="callout">
+          <h4 class="r-store">The ITP record survives</h4>
+          <p>Every behavior becomes an ITP message in the interaction's <code>Communication</code>, original and converted. With persistence enabled, <code>/results</code> returns both the turn record and those messages.</p>
+        </div>
+      </div>
+    </section>
+
+    <footer class="foot-note">
+      ITP reference implementation · API flow · implements docs/ITP_API_Specification.pdf<br>
+      Design notes, extensions and known gaps: docs/api_design.md · generated OpenAPI at /docs · companion: <a href="itp-communication-flow.html">itp-communication-flow.html</a>
+    </footer>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // Captured from a real four-turn run against the API: participant A against a
+  // dummy-ipc model agent B. Values are the ones the server actually returned.
+  var STEPS = [
+    {
+      title: "Fetch the model and its state space schema",
+      why: "Every interaction is bound to an exact model id and version. The model's stateSpaceSchema validates both the behavior the client submits and the experience it receives.",
+      verb: "GET", path: "/api/v1/models/dummy-ipc",
+      status: 200, statusText: "OK",
+      res: '{\n  "id": "dummy-ipc",\n  "version": "0.2.0",\n  "stateSpaceSchema": {\n    "type": "object",\n    "required": ["Theta", "R"],\n    "additionalProperties": false,\n    "properties": { … }\n  },\n  "constraints": { "minimumTurns": 1, "maximumTurns": 1000 }\n}',
+      state: { status: "—", turn: "—", active: "—", cursor: "—" },
+      note: "The schema is compiled from the IBSSS description in <strong>schema/interpersonal-behavior-state-space/ipc.json</strong>, so it cannot drift from the state space it describes."
+    },
+    {
+      title: "Create the interaction",
+      why: "Agent A is the participant, agent B a formal model. The response carries the interaction token — the only time it is shown.",
+      verb: "POST", path: "/api/v1/interactions",
+      req: '{\n  "modelId": "dummy-ipc",\n  "modelVersion": "0.2.0",\n  "numberOfTurns": 4,\n  "persistence": { "enabled": true },\n  "agents": {\n    "A": { "type": "human", "displayName": "Participant A" },\n    "B": { "type": "model" }\n  },\n  "clientRequestId": "create-interaction-7d14d66f"\n}',
+      status: 201, statusText: "Created",
+      res: '{\n  "sessionId": "d866c141-394e-41ca-bc7b-3aec8ea432ad",\n  "interactionToken": "<token>",\n  "status": "waitingForRegistration",\n  "currentTurn": 0,\n  "activeAgentIds": [],\n  "agents": { "A": { "agentId": "ec554a99-…", "registrationStatus": "pending" },\n              "B": { "agentId": "9b579baa-…", "registrationStatus": "registered" } }\n}',
+      state: { status: "waitingForRegistration", turn: "0", active: "[]", cursor: "—" },
+      note: "Agent B is already <strong>registered</strong>: formal model agents are registered and instantiated by the server. No invitation code is issued, because only one human takes part."
+    },
+    {
+      title: "Register the participant",
+      why: "The client that created the interaction already holds the token, so it registers its own agent directly rather than through an invitation code.",
+      verb: "POST", path: "/api/v1/interactions/{sessionId}/agents/{agentA}/register",
+      req: '{\n  "participant": { "participantId": "participant-1042",\n                   "displayName": "Participant A" },\n  "client": { "clientId": "browser-installation-91c5" }\n}',
+      status: 200, statusText: "OK",
+      res: '{\n  "sessionId": "d866c141-…",\n  "agentId": "ec554a99-…",\n  "agentRole": "A",\n  "registrationStatus": "registered",\n  "sessionStatus": "running",\n  "registeredAt": "2026-09-11T12:27:44Z"\n}',
+      state: { status: "running", turn: "1", active: "[A]", cursor: "—", changed: ["status", "turn", "active"] },
+      note: "Every human agent is now registered, so the server starts the interaction itself. The token is also <strong>bound to agent A</strong> from here on and can no longer address agent B."
+    },
+    {
+      title: "Poll for a perception",
+      why: "The client asks what its agent should do. wait=25 holds the request open until something happens, so the browser is not spinning on a timer.",
+      verb: "GET", path: "/api/v1/interactions/{sessionId}/agents/{agentA}/perception?wait=25",
+      status: 200, statusText: "OK",
+      res: '{\n  "state": "actionRequired",\n  "sessionStatus": "running",\n  "perceptionId": "59e3ed50-ac1f-4353-8dc4-90c350178323",\n  "cursor": "1",\n  "turn": 1,\n  "agentId": "ec554a99-…",\n  "actionRequired": true,\n  "createdAt": "2026-09-11T12:27:44Z"\n}',
+      state: { status: "running", turn: "1", active: "[A]", cursor: "1", changed: ["cursor"] },
+      note: "<strong>actionRequired</strong>, not perceivable: agent A opens the interaction, so nothing has happened yet that it could perceive. There is no experience field, because there is no experience to report."
+    },
+    {
+      title: "Submit the behavior",
+      why: "The participant acted in the interface, and the client sends the resulting state vector for the turn the perception named.",
+      verb: "POST", path: "/api/v1/interactions/{sessionId}/agents/{agentA}/actions",
+      req: '{\n  "actionId": "client-action-1",\n  "turn": 1,\n  "behavior": { "Theta": 90.0, "R": 0.6 }\n}',
+      status: 202, statusText: "Accepted",
+      res: '{\n  "status": "accepted",\n  "sessionId": "d866c141-…",\n  "agentId": "ec554a99-…",\n  "actionId": "client-action-1",\n  "turn": 1,\n  "sessionStatus": "running",\n  "acceptedAt": "2026-09-11T12:27:44Z"\n}',
+      state: { status: "running", turn: "3", active: "[A]", cursor: "1", changed: ["turn"] },
+      note: "The turn went from 1 to <strong>3</strong>, not 2. Agent B became active for turn 2, and because it is a formal model the server played it immediately — then handed the turn straight back to A."
+    },
+    {
+      title: "Poll again, past the last cursor",
+      why: "after=1 tells the server which perception the client already handled, so it returns the next one rather than the same one.",
+      verb: "GET", path: "/api/v1/interactions/{sessionId}/agents/{agentA}/perception?after=1&wait=25",
+      status: 200, statusText: "OK",
+      res: '{\n  "state": "perceivable",\n  "sessionStatus": "running",\n  "perceptionId": "d87a225a-d1d0-473d-9e4b-786e40303a8f",\n  "cursor": "3",\n  "turn": 3,\n  "agentId": "ec554a99-…",\n  "actionRequired": true,\n  "experience": { "Theta": 17.99950146779014,\n                  "R": 0.4172976538233931 },\n  "sourceAgentId": "9b579baa-…",\n  "createdAt": "2026-09-11T12:27:44Z"\n}',
+      state: { status: "running", turn: "3", active: "[A]", cursor: "3", changed: ["cursor"] },
+      note: "This is what the model did in turn 2, already in agent A's state space. Both agents use <strong>ipc</strong> here, so no conversion was needed; had A been in sasb, the vector would arrive converted."
+    },
+    {
+      title: "Submit the second behavior",
+      why: "Turn 3 is the participant's last action. The turn number comes straight from the perception.",
+      verb: "POST", path: "/api/v1/interactions/{sessionId}/agents/{agentA}/actions",
+      req: '{\n  "actionId": "client-action-2",\n  "turn": 3,\n  "behavior": { "Theta": 120.0, "R": 0.6 }\n}',
+      status: 202, statusText: "Accepted",
+      res: '{\n  "status": "accepted",\n  "sessionId": "d866c141-…",\n  "agentId": "ec554a99-…",\n  "actionId": "client-action-2",\n  "turn": 3,\n  "sessionStatus": "completed",\n  "acceptedAt": "2026-09-11T12:27:44Z"\n}',
+      state: { status: "completed", turn: "4", active: "[]", cursor: "3", changed: ["status", "turn", "active"] },
+      note: "The acceptance already reports <strong>completed</strong>. The server played the model's turn 4 inside this request, which was the last turn, so the interaction ended before the response was written."
+    },
+    {
+      title: "Read the final perception",
+      why: "The interaction has ended, but agent A has not yet seen what the model did in turn 4. Queued perceptions are still delivered.",
+      verb: "GET", path: "/api/v1/interactions/{sessionId}/agents/{agentA}/perception?after=3&wait=25",
+      status: 200, statusText: "OK",
+      res: '{\n  "state": "perceivable",\n  "sessionStatus": "completed",\n  "perceptionId": "264f824a-7717-4b5f-ad1c-18cb3b7454e8",\n  "cursor": "5",\n  "turn": 4,\n  "agentId": "ec554a99-…",\n  "actionRequired": false,\n  "experience": { "Theta": 68.99975073389507,\n                  "R": 0.5086488269116965 },\n  "sourceAgentId": "9b579baa-…"\n}',
+      state: { status: "completed", turn: "4", active: "[]", cursor: "5", changed: ["cursor"] },
+      note: "<strong>perceivable</strong> with sessionStatus completed, and <strong>actionRequired: false</strong>. The client can show the model's last move without being told to act on an interaction that is over."
+    },
+    {
+      title: "Poll once more",
+      why: "The cursor has caught up and there is nothing queued, so the server reports the ending instead of a perception.",
+      verb: "GET", path: "/api/v1/interactions/{sessionId}/agents/{agentA}/perception?after=5&wait=25",
+      status: 200, statusText: "OK",
+      res: '{\n  "state": "interactionEnded",\n  "sessionStatus": "completed",\n  "finalTurn": 4,\n  "endReason": "numberOfTurnsReached",\n  "endedAt": "2026-09-11T12:27:44Z"\n}',
+      state: { status: "completed", turn: "4", active: "[]", cursor: "5" },
+      note: "<strong>interactionEnded</strong> is the client's signal to stop polling. It arrives only after every queued perception has been read, so nothing is lost by ending the loop here."
+    },
+    {
+      title: "Read the recorded interaction",
+      why: "With persistence enabled the whole interaction is available afterwards, in both representations.",
+      verb: "GET", path: "/api/v1/interactions/{sessionId}/results",
+      status: 200, statusText: "OK",
+      res: '{\n  "status": "completed",\n  "numberOfTurns": 4,\n  "context": "workplace_colleague_conversation",\n  "turns": [\n    { "turn": 1, "actorAgentId": "A", "behavior": { "Theta": 90.0, "R": 0.6 } },\n    { "turn": 2, "actorAgentId": "B", "behavior": { "Theta": 17.99950146779014, "R": 0.4172976538233931 } },\n    { "turn": 3, "actorAgentId": "A", "behavior": { "Theta": 120.0, "R": 0.6 } },\n    { "turn": 4, "actorAgentId": "B", "behavior": { "Theta": 68.99975073389507, "R": 0.5086488269116965 } }\n  ],\n  "itpMessages": [ … 4 ITP messages … ]\n}',
+      state: { status: "completed", turn: "4", active: "[]", cursor: "5" },
+      note: "Four turns, alternating, two from each agent. <strong>itpMessages</strong> holds the same interaction as ITP messages — the format the rest of the codebase reads."
+    }
+  ];
+
+  var PILL = {
+    waitingForRegistration: "s-wait",
+    running: "s-run",
+    completed: "s-done",
+    terminated: "s-done",
+    failed: "s-fail"
+  };
+
+  var el = function (id) { return document.getElementById(id); };
+  var ticks = el("walk-ticks");
+  var index = 0;
+
+  STEPS.forEach(function (step, i) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.textContent = String(i + 1);
+    b.setAttribute("aria-label", "Step " + (i + 1) + ": " + step.title);
+    b.addEventListener("click", function () { show(i); });
+    ticks.appendChild(b);
+  });
+
+  function show(i) {
+    index = Math.max(0, Math.min(STEPS.length - 1, i));
+    var s = STEPS[index];
+    var changed = s.state.changed || [];
+
+    el("walk-n").textContent = String(index + 1);
+    el("walk-title").textContent = s.title;
+    el("walk-why").textContent = s.why;
+
+    var verb = el("walk-verb");
+    verb.textContent = s.verb;
+    verb.className = "verb " + s.verb.toLowerCase();
+    el("walk-path").textContent = s.path;
+
+    var reqbox = el("walk-reqbox");
+    if (s.req) {
+      el("walk-req").textContent = s.req;
+      reqbox.hidden = false;
+    } else {
+      reqbox.hidden = true;
+    }
+
+    el("walk-status").textContent = String(s.status);
+    el("walk-statustext").textContent = s.statusText;
+    el("walk-res").textContent = s.res;
+
+    var status = el("walk-st-status");
+    status.textContent = s.state.status;
+    status.className = "pill " + (PILL[s.state.status] || "s-wait");
+
+    setValue("walk-st-turn", s.state.turn, changed.indexOf("turn") > -1);
+    setValue("walk-st-active", s.state.active, changed.indexOf("active") > -1);
+    setValue("walk-st-cursor", s.state.cursor, changed.indexOf("cursor") > -1);
+    el("walk-note").innerHTML = s.note;
+
+    el("walk-prev").disabled = index === 0;
+    el("walk-next").disabled = index === STEPS.length - 1;
+
+    Array.prototype.forEach.call(ticks.children, function (b, n) {
+      b.setAttribute("aria-current", n === index ? "true" : "false");
+    });
+  }
+
+  function setValue(id, value, isChanged) {
+    var node = el(id);
+    node.textContent = value;
+    node.className = isChanged ? "v changed" : "v";
+  }
+
+  el("walk-prev").addEventListener("click", function () { show(index - 1); });
+  el("walk-next").addEventListener("click", function () { show(index + 1); });
+
+  document.addEventListener("keydown", function (event) {
+    if (event.target && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)) { return; }
+    if (event.key === "ArrowLeft") { show(index - 1); }
+    if (event.key === "ArrowRight") { show(index + 1); }
+  });
+
+  show(0);
+})();
+</script>
+</body>
+</html>

@@ -16,7 +16,7 @@ PairedStates = list[tuple[float, float]]
 CommunionDistribution = dict[float, float]
 
 
-class StateSpaceConverter(BaseConverter):
+class BehavioralStateSpaceConverter(BaseConverter):
     """
     Convert LASSI communion states onto the Westermann relational state space.
 
@@ -477,7 +477,7 @@ if __name__ == "__main__":
     communion_b = message_b["values"]["communion"]
     window = [(communion_a, communion_b)]
 
-    converter = StateSpaceConverter(min_observations=1)
+    converter = BehavioralStateSpaceConverter(min_observations=1)
     relational_state = converter.convert({"paired_states": window})
 
     print(f"direction:        {converter.describe()}")

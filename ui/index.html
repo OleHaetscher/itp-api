@@ -1,0 +1,1320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ITP API — mock client</title>
+<style>
+  /* Palette and spacing follow the PerTRAIN design system: neutral surfaces,
+     one blue for primary actions and links, green and amber reserved for
+     state. Type is the system sans stack, so the page stays a single file
+     with no font binaries and no third-party requests. */
+  :root {
+    --background: #FAFAFA;
+    --card: #FFFFFF;
+    --foreground: #1F2937;
+    --body-fg: #374151;
+    --muted-fg: #6B7280;
+    --subtle: #F3F4F6;
+    --border: #E5E7EB;
+    --input: #D1D5DB;
+
+    --primary: #2C6BB5;
+    --primary-fg: #FFFFFF;
+    --sci: #3B82D6;
+    --ok: #159570;
+    --ok-fg: #0E6B51;
+    --warn: #D68A1F;
+    --warn-fg: #8F5B12;
+    --error: #DC2626;
+    --error-fg: #C21F1F;
+
+    --shadow: 0 1px 2px 0 rgba(31, 41, 55, 0.05);
+    --shadow-md: 0 6px 18px -4px rgba(31, 41, 55, 0.12);
+
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 34px 28px 64px;
+    background: var(--background);
+    color: var(--body-fg);
+    font-family: var(--font);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page { max-width: 1320px; margin: 0 auto; }
+
+  header { margin-bottom: 26px; }
+
+  header .eyebrow {
+    color: var(--sci);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  header h1 {
+    margin: 6px 0 8px;
+    font-size: 34px;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--foreground);
+    font-weight: 700;
+  }
+
+  header p { margin: 0; color: var(--muted-fg); max-width: 78ch; }
+
+  .columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 400px;
+    gap: 20px;
+    align-items: start;
+  }
+
+  @media (max-width: 1080px) { .columns { grid-template-columns: minmax(0, 1fr); } }
+
+  /* ---------------------------------------------------------- collapsibles */
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+
+  .card-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 14px 18px;
+    background: none;
+    border: none;
+    font-family: var(--font);
+    font-size: 16px;
+    text-align: left;
+    cursor: pointer;
+    color: var(--foreground);
+  }
+
+  .card-head:hover { background: var(--subtle); }
+  .card-head:focus-visible { outline: 2px solid var(--sci); outline-offset: -2px; }
+
+  .step {
+    flex: 0 0 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--subtle);
+    color: var(--muted-fg);
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .card.done .step { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok-fg); }
+  .card.active .step { background: var(--primary); color: var(--primary-fg); }
+
+  .card-title { font-weight: 600; letter-spacing: -0.01em; }
+
+  .card-hint {
+    margin-left: auto;
+    color: var(--muted-fg);
+    font-size: 13px;
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 46%;
+  }
+
+  .chevron {
+    flex: 0 0 auto;
+    color: var(--muted-fg);
+    font-size: 12px;
+    transition: transform 0.15s ease;
+  }
+
+  .card.collapsed .chevron { transform: rotate(-90deg); }
+  .card.collapsed .card-body { display: none; }
+
+  .card-body { padding: 4px 18px 20px; border-top: 1px solid var(--border); }
+  .card-body > :first-child { margin-top: 14px; }
+
+  /* ---------------------------------------------------------------- fields */
+
+  label {
+    display: block;
+    color: var(--foreground);
+    font-size: 13px;
+    font-weight: 600;
+    margin: 14px 0 5px;
+  }
+
+  label .hint { font-weight: 400; color: var(--muted-fg); }
+
+  input[type="text"], input[type="number"], select {
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--card);
+    border: 1px solid var(--input);
+    border-radius: 8px;
+    color: var(--foreground);
+    font-family: var(--font);
+    font-size: 15px;
+  }
+
+  input:focus, select:focus {
+    outline: none;
+    border-color: var(--sci);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--sci) 18%, transparent);
+  }
+
+  button.action {
+    background: var(--primary);
+    color: var(--primary-fg);
+    border: 1px solid var(--primary);
+    border-radius: 8px;
+    padding: 9px 18px;
+    font-family: var(--font);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    margin: 16px 8px 0 0;
+  }
+
+  button.action:hover { background: #245A9B; }
+
+  button.quiet {
+    background: var(--card);
+    color: var(--body-fg);
+    border: 1px solid var(--input);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-family: var(--font);
+    font-size: 14px;
+    cursor: pointer;
+    margin: 16px 8px 0 0;
+  }
+
+  button.quiet:hover { background: var(--subtle); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .row { display: flex; gap: 14px; }
+  .row > * { flex: 1 1 0; min-width: 0; }
+
+  .checkbox { display: flex; align-items: center; gap: 9px; margin-top: 16px; }
+  .checkbox label { margin: 0; font-weight: 400; color: var(--body-fg); }
+  .checkbox input { width: auto; accent-color: var(--primary); }
+
+  /* --------------------------------------------------------------- content */
+
+  .models { display: grid; gap: 10px; margin-top: 14px; }
+
+  .model-card {
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 12px 14px;
+    cursor: pointer;
+    background: var(--card);
+  }
+
+  .model-card:hover { border-color: var(--input); }
+
+  .model-card.selected {
+    border-color: var(--sci);
+    background: color-mix(in srgb, var(--sci) 6%, transparent);
+  }
+
+  .model-card .name { font-weight: 600; color: var(--foreground); }
+  .model-card .meta { color: var(--muted-fg); font-size: 13px; margin-top: 2px; }
+
+  dl.facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 14px 0 0; }
+  dl.facts dt { color: var(--muted-fg); font-size: 13px; }
+  dl.facts dd { margin: 0; color: var(--foreground); font-size: 14px; }
+
+  .mono { font-family: var(--mono); font-size: 13px; }
+
+  .invitation {
+    font-family: var(--mono);
+    font-size: 32px;
+    font-weight: 600;
+    letter-spacing: 8px;
+    color: var(--warn-fg);
+    background: color-mix(in srgb, var(--warn) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--warn) 32%, transparent);
+    border-radius: 9px;
+    text-align: center;
+    padding: 14px 0;
+    margin-top: 14px;
+  }
+
+  .pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    color: var(--muted-fg);
+    background: var(--subtle);
+  }
+
+  .pill.ok { color: var(--ok-fg); background: color-mix(in srgb, var(--ok) 12%, transparent); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+  .pill.warn { color: var(--warn-fg); background: color-mix(in srgb, var(--warn) 12%, transparent); border-color: color-mix(in srgb, var(--warn) 32%, transparent); }
+  .pill.bad { color: var(--error-fg); background: color-mix(in srgb, var(--error) 10%, transparent); border-color: color-mix(in srgb, var(--error) 28%, transparent); }
+
+  .experience { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+
+  .experience .value {
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 10px 16px;
+    background: var(--subtle);
+    font-family: var(--mono);
+    font-size: 17px;
+    color: var(--foreground);
+  }
+
+  .experience .value .dim {
+    display: block;
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted-fg);
+  }
+
+  .dimension {
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 12px 14px;
+    margin-top: 12px;
+    background: var(--card);
+  }
+
+  .dimension.out-of-range { border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
+  .dimension label { margin-top: 0; }
+  .dimension .bounds { color: var(--muted-fg); font-size: 12px; margin-top: 6px; }
+
+  pre {
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.5;
+    background: var(--subtle);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    margin: 10px 0 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--body-fg);
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 14px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted-fg); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  tr:last-child td { border-bottom: none; }
+
+  details > summary {
+    cursor: pointer;
+    color: var(--primary);
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 16px;
+  }
+
+  .note { color: var(--muted-fg); font-size: 13px; margin-top: 12px; }
+  .warn-note { color: var(--warn-fg); font-size: 13px; margin-top: 12px; }
+  .hidden { display: none; }
+
+  /* ------------------------------------------------------------------- log */
+
+  #log { max-height: 72vh; overflow-y: auto; margin-top: 6px; }
+
+  .entry { border-bottom: 1px solid var(--border); padding: 10px 0; }
+  .entry:last-child { border-bottom: none; }
+  .entry .line { display: flex; gap: 9px; align-items: baseline; font-family: var(--mono); font-size: 12px; }
+  .entry .status { flex: 0 0 auto; font-weight: 600; }
+  .entry .status.ok { color: var(--ok-fg); }
+  .entry .status.bad { color: var(--error-fg); }
+  .entry .path { color: var(--body-fg); overflow-wrap: anywhere; }
+  .entry .time { margin-left: auto; color: var(--muted-fg); flex: 0 0 auto; }
+
+  .entry .problem {
+    color: var(--error-fg);
+    font-family: var(--font);
+    font-size: 13px;
+    margin-top: 7px;
+    background: color-mix(in srgb, var(--error) 6%, transparent);
+    border: 1px solid color-mix(in srgb, var(--error) 22%, transparent);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+
+  .entry .problem ul { margin: 6px 0 0 16px; padding: 0; }
+  .entry details > summary { margin-top: 7px; font-weight: 400; color: var(--muted-fg); }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <div class="eyebrow">Interpersonal Transaction Protocol</div>
+  <h1>API mock client</h1>
+  <p>
+    A stand-in for the JavaScript application, so the interaction workflow can be walked through
+    by hand. It talks to the API the way a browser client will: bearer token, six-digit
+    invitations, long-polled perceptions, behavior vectors validated against the state space
+    schema the model declares. Every request and response is on the right.
+  </p>
+</header>
+
+<div class="columns">
+  <div>
+
+    <!-- ------------------------------------------------------------- 1 -->
+    <section class="card" id="card-connect">
+      <button class="card-head" data-card="card-connect">
+        <span class="step">1</span>
+        <span class="card-title">Connect</span>
+        <span class="card-hint" id="hint-connect">not connected</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="card-body">
+        <label>API base URL <span class="hint">— without /api/v1</span></label>
+        <input type="text" id="base-url" value="http://127.0.0.1:8001">
+        <button class="action" id="connect">Load model catalogue</button>
+        <div class="models" id="models"></div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------- 2 -->
+    <section class="card collapsed hidden" id="card-setup">
+      <button class="card-head" data-card="card-setup">
+        <span class="step">2</span>
+        <span class="card-title">Set up the interaction</span>
+        <span class="card-hint" id="hint-setup"></span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="card-body">
+        <label>Who is in the interaction</label>
+        <select id="flow">
+          <option value="human-model">You and the model</option>
+          <option value="human-human">You and a second participant</option>
+          <option value="model-model">Two models, you watch</option>
+        </select>
+
+        <label>Your state space <span class="hint">— the space you act in</span></label>
+        <select id="state-space"></select>
+
+        <div class="row">
+          <div>
+            <label>Turns <span class="hint">— single actions</span></label>
+            <input type="number" id="turns" value="6" min="1">
+          </div>
+          <div>
+            <label>You act in turn 1</label>
+            <select id="starting-role">
+              <option value="A">yes</option>
+              <option value="B">no, the partner starts</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Participant id</label>
+            <input type="text" id="participant-id" value="participant-1042">
+          </div>
+          <div>
+            <label>Display name</label>
+            <input type="text" id="display-name" value="Ole">
+          </div>
+        </div>
+
+        <label>Client id</label>
+        <input type="text" id="client-id" value="mock-ui">
+
+        <div class="checkbox">
+          <input type="checkbox" id="persistence" checked>
+          <label for="persistence">Keep the record, and write it to the results folder</label>
+        </div>
+
+        <button class="action" id="create">Create interaction</button>
+        <div class="note">
+          Creating registers you and starts polling. With two models the server plays both and
+          the interaction is over before the response returns.
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------------- join -->
+    <section class="card collapsed" id="card-join">
+      <button class="card-head" data-card="card-join">
+        <span class="step">+</span>
+        <span class="card-title">Join with a code</span>
+        <span class="card-hint">for the second participant</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="card-body">
+        <div class="note">
+          Open this page in a second tab, leave the steps above untouched, and redeem the
+          six-digit code the first tab shows.
+        </div>
+        <label>Invitation code</label>
+        <input type="text" id="join-code" inputmode="numeric" maxlength="6" placeholder="000000">
+        <div class="row">
+          <div>
+            <label>Participant id</label>
+            <input type="text" id="join-participant-id" value="participant-2088">
+          </div>
+          <div>
+            <label>Display name</label>
+            <input type="text" id="join-display-name" value="Participant B">
+          </div>
+        </div>
+        <button class="action" id="join">Join</button>
+      </div>
+    </section>
+
+    <!-- --------------------------------------------------------- invite -->
+    <section class="card hidden" id="card-invitation">
+      <button class="card-head" data-card="card-invitation">
+        <span class="step">!</span>
+        <span class="card-title">Invitation code</span>
+        <span class="card-hint" id="hint-invitation"></span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="card-body">
+        <div class="invitation" id="invitation-code">------</div>
+        <div class="note" id="invitation-note"></div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------- 3 -->
+    <section class="card hidden" id="card-interaction">
+      <button class="card-head" data-card="card-interaction">
+        <span class="step">3</span>
+        <span class="card-title">The interaction</span>
+        <span class="card-hint" id="hint-interaction"></span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="card-body">
+        <dl class="facts" id="interaction-facts"></dl>
+        <button class="quiet" id="refresh-status">Refresh status</button>
+        <button class="quiet" id="end">End interaction</button>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------- 4 -->
+    <section class="card hidden" id="card-perception">
+      <button class="card-head" data-card="card-perception">
+        <span class="step">4</span>
+        <span class="card-title">What you perceive</span>
+        <span class="card-hint" id="hint-perception"></span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="card-body">
+        <div id="perception-state"></div>
+        <div class="experience" id="experience"></div>
+        <div class="note" id="perception-note"></div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------- 5 -->
+    <section class="card hidden" id="card-action">
+      <button class="card-head" data-card="card-action">
+        <span class="step">5</span>
+        <span class="card-title">What you do</span>
+        <span class="card-hint" id="hint-action"></span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="card-body">
+        <div class="note" id="action-note"></div>
+        <div id="dimensions"></div>
+        <button class="action" id="submit" disabled>Submit behavior</button>
+        <div class="warn-note hidden" id="range-warning"></div>
+        <details>
+          <summary>the schema the server validates against</summary>
+          <pre id="schema"></pre>
+        </details>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------- 6 -->
+    <section class="card collapsed hidden" id="card-record">
+      <button class="card-head" data-card="card-record">
+        <span class="step">6</span>
+        <span class="card-title">The record</span>
+        <span class="card-hint" id="hint-record"></span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="card-body">
+        <dl class="facts" id="record-facts"></dl>
+        <div id="record-turns"></div>
+        <details>
+          <summary>ITP messages the server built from the bare vectors</summary>
+          <pre id="record-messages"></pre>
+        </details>
+        <button class="quiet" id="load-results">Reload results</button>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ----------------------------------------------------------------- log -->
+  <div>
+    <section class="card" id="card-log">
+      <button class="card-head" data-card="card-log">
+        <span class="step">≡</span>
+        <span class="card-title">Protocol log</span>
+        <span class="card-hint" id="hint-log">0 calls</span>
+        <span class="chevron">▾</span>
+      </button>
+      <div class="card-body">
+        <div class="note">
+          Newest first. Errors are RFC 9457 problem documents and are shown in full.
+        </div>
+        <button class="quiet" id="clear-log">Clear</button>
+        <div id="log"></div>
+      </div>
+    </section>
+  </div>
+
+</div>
+</div>
+
+<script>
+"use strict";
+
+const API_PREFIX = "/api/v1";
+
+// Seconds the server may hold a perception request open. The server caps this
+// at 30; a lower value keeps the log readable while idle.
+const LONG_POLL_SECONDS = 15;
+
+const state = {
+  baseUrl: "",
+  models: [],
+  // model identifier -> the definition GET /models/{id} returned, so selecting
+  // a model does not fetch what the catalogue pass already has.
+  definitions: {},
+  // state space identifier -> compiled JSON Schema, collected from every model
+  // in the catalogue. A human agent may act in a space other than the model's,
+  // and this is where the schema for that space comes from: there is no
+  // endpoint for a state space on its own.
+  schemas: {},
+  modelId: null,
+  stateSpace: null,
+  token: null,
+  sessionId: null,
+  agentId: null,
+  agentRole: null,
+  cursor: null,
+  polling: false,
+  pendingTurn: null,
+  calls: 0,
+};
+
+const element = (id) => document.getElementById(id);
+
+function show(id, visible = true) {
+  element(id).classList.toggle("hidden", !visible);
+}
+
+function sleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+// ------------------------------------------------------------- collapsibles
+
+function openCard(id, { active = false } = {}) {
+  // Opening a card means the flow is back at that step, so the finished mark
+  // goes. A card the reader opens by hand only toggles `collapsed` and keeps
+  // whatever mark it had.
+  const card = element(id);
+  card.classList.remove("hidden", "collapsed", "done");
+  card.classList.toggle("active", active);
+}
+
+function collapseCard(id, { done = false } = {}) {
+  const card = element(id);
+  card.classList.add("collapsed");
+  card.classList.remove("active");
+  if (done) card.classList.add("done");
+}
+
+function setHint(id, text) {
+  element(`hint-${id}`).textContent = text;
+}
+
+for (const head of document.querySelectorAll(".card-head")) {
+  head.addEventListener("click", () => {
+    element(head.dataset.card).classList.toggle("collapsed");
+  });
+}
+
+// --------------------------------------------------------------------- log
+
+function logEntry(method, path, status, body) {
+  state.calls += 1;
+  setHint("log", `${state.calls} call${state.calls === 1 ? "" : "s"}`);
+
+  const entry = document.createElement("div");
+  entry.className = "entry";
+
+  const good = status !== null && status < 400;
+  const line = document.createElement("div");
+  line.className = "line";
+  line.innerHTML =
+    `<span class="status ${good ? "ok" : "bad"}">${status ?? "ERR"}</span>` +
+    `<span class="path">${method} ${path}</span>` +
+    `<span class="time">${new Date().toLocaleTimeString()}</span>`;
+  entry.appendChild(line);
+
+  if (body && typeof body === "object" && body.title && !good) {
+    const problem = document.createElement("div");
+    problem.className = "problem";
+
+    let text = `<b>${body.title}</b>`;
+    if (body.detail) text += ` — ${body.detail}`;
+    if (body.type) text += `<br><span class="mono">${body.type}</span>`;
+
+    if (Array.isArray(body.errors) && body.errors.length > 0) {
+      text += "<ul>";
+      for (const error of body.errors) {
+        text +=
+          `<li><span class="mono">${error.path || "—"}</span> ${error.message || ""}` +
+          `${error.code ? ` <span class="mono">(${error.code})</span>` : ""}</li>`;
+      }
+      text += "</ul>";
+    }
+
+    if (body.requestId) text += `<br><span class="mono">requestId ${body.requestId}</span>`;
+
+    problem.innerHTML = text;
+    entry.appendChild(problem);
+  }
+
+  if (body !== undefined && body !== null) {
+    const details = document.createElement("details");
+    details.innerHTML =
+      "<summary>body</summary><pre>" +
+      JSON.stringify(body, null, 2).replace(/</g, "&lt;") +
+      "</pre>";
+    entry.appendChild(details);
+  }
+
+  const log = element("log");
+  log.insertBefore(entry, log.firstChild);
+
+  while (log.childElementCount > 150) {
+    log.removeChild(log.lastChild);
+  }
+}
+
+// ----------------------------------------------------------------- requests
+
+async function request(method, path, options = {}) {
+  const { payload = null, parameters = null, authenticated = true } = options;
+
+  let url = `${state.baseUrl}${API_PREFIX}${path}`;
+  const query = parameters ? new URLSearchParams(parameters).toString() : "";
+  if (query) url += `?${query}`;
+
+  const headers = {};
+  if (payload) headers["Content-Type"] = "application/json";
+  if (authenticated && state.token) headers["Authorization"] = `Bearer ${state.token}`;
+
+  let response;
+
+  try {
+    response = await fetch(url, {
+      method,
+      headers,
+      body: payload ? JSON.stringify(payload) : undefined,
+    });
+  } catch (error) {
+    logEntry(method, path, null, {
+      title: "Request failed",
+      detail: `${error}. Is the API running, and does its CORS list allow this origin?`,
+    });
+    return { ok: false, status: null, body: null };
+  }
+
+  let body = null;
+
+  try {
+    body = await response.json();
+  } catch (error) {
+    body = null;
+  }
+
+  logEntry(method, query ? `${path}?${query}` : path, response.status, body);
+
+  return { ok: response.ok, status: response.status, body };
+}
+
+// ---------------------------------------------------------------- catalogue
+
+function stateSpaceOf(definition) {
+  // GET /models/{id} returns the state space description under `stateSpace`,
+  // whose own `stateSpace` key is the ITP state space identifier.
+  return definition.stateSpace?.stateSpace ?? definition.id;
+}
+
+async function connect() {
+  state.baseUrl = element("base-url").value.replace(/\/+$/, "");
+
+  const result = await request("GET", "/models", { authenticated: false });
+
+  if (!result.ok) {
+    setHint("connect", "could not reach the API");
+    openCard("card-connect", { active: true });
+    return;
+  }
+
+  state.models = result.body.models;
+  state.definitions = {};
+  state.schemas = {};
+
+  const container = element("models");
+  container.innerHTML = "";
+
+  for (const model of state.models) {
+    const card = document.createElement("div");
+    card.className = "model-card";
+    card.dataset.modelId = model.id;
+    card.innerHTML =
+      `<div class="name">${model.name}</div>` +
+      `<div class="meta">${model.id} · v${model.version} · ${model.status}` +
+      ` · agents: ${model.supportedAgentTypes.join(", ")}</div>` +
+      `<div class="meta">${model.description}</div>`;
+    card.addEventListener("click", () => selectModel(model.id));
+    container.appendChild(card);
+  }
+
+  // Every model definition carries the compiled schema of its state space, so
+  // fetching them all gives the page a schema for every space this API knows.
+  for (const model of state.models) {
+    const definition = await request("GET", `/models/${model.id}`, { authenticated: false });
+    if (definition.ok) {
+      state.definitions[model.id] = definition.body;
+      state.schemas[stateSpaceOf(definition.body)] = definition.body.stateSpaceSchema;
+    }
+  }
+
+  if (state.models.length > 0) await selectModel(state.models[0].id);
+
+  show("card-setup", true);
+  collapseCard("card-connect", { done: true });
+  openCard("card-setup", { active: true });
+}
+
+async function selectModel(modelId) {
+  state.modelId = modelId;
+
+  for (const card of document.querySelectorAll(".model-card")) {
+    card.classList.toggle("selected", card.dataset.modelId === modelId);
+  }
+
+  let definition = state.definitions[modelId];
+
+  if (!definition) {
+    const fetched = await request("GET", `/models/${modelId}`, { authenticated: false });
+    if (!fetched.ok) return;
+    definition = fetched.body;
+    state.definitions[modelId] = definition;
+  }
+
+  const modelSpace = stateSpaceOf(definition);
+  state.schemas[modelSpace] = definition.stateSpaceSchema;
+
+  const select = element("state-space");
+  select.innerHTML = "";
+
+  const same = document.createElement("option");
+  same.value = modelSpace;
+  same.textContent = `${modelSpace} — the same space as the model`;
+  select.appendChild(same);
+
+  for (const space of Object.keys(state.schemas)) {
+    if (space === modelSpace) continue;
+    const option = document.createElement("option");
+    option.value = space;
+    option.textContent = `${space} — converted for you`;
+    select.appendChild(option);
+  }
+
+  renderSchema(modelSpace);
+
+  setHint("connect", `${state.models.length} models · ${definition.name}`);
+  setHint("setup", `${modelId} · ${modelSpace}`);
+}
+
+function renderSchema(space) {
+  state.stateSpace = space;
+  element("schema").textContent = JSON.stringify(state.schemas[space] ?? {}, null, 2);
+}
+
+// -------------------------------------------------------------- interaction
+
+function agentsFor(flow) {
+  const displayName = element("display-name").value;
+  const space = element("state-space").value;
+
+  const you = { type: "human", displayName };
+  if (space) you.stateSpace = space;
+
+  if (flow === "human-model") return { A: you, B: { type: "model" } };
+  if (flow === "human-human") {
+    return { A: you, B: { type: "human", displayName: "Second participant" } };
+  }
+  return { A: { type: "model" }, B: { type: "model" } };
+}
+
+async function createInteraction() {
+  const flow = element("flow").value;
+
+  // The interaction context is deliberately not sent. It reaches the ITP
+  // messages but modulates nothing in any model yet, so the API's default
+  // stands rather than a control that suggests a choice with no consequence.
+  const created = await request("POST", "/interactions", {
+    payload: {
+      modelId: state.modelId,
+      numberOfTurns: Number(element("turns").value),
+      agents: agentsFor(flow),
+      persistence: { enabled: element("persistence").checked },
+      startingAgentRole: element("starting-role").value,
+      clientRequestId: `create-${crypto.randomUUID().slice(0, 8)}`,
+    },
+    authenticated: false,
+  });
+
+  if (!created.ok) return;
+
+  state.token = created.body.interactionToken;
+  state.sessionId = created.body.sessionId;
+  state.cursor = null;
+
+  collapseCard("card-connect", { done: true });
+  collapseCard("card-setup", { done: true });
+  collapseCard("card-join", { done: false });
+
+  renderStatus(created.body);
+  show("card-interaction", true);
+  openCard("card-interaction");
+
+  if (flow === "model-model") {
+    setHint("setup", "two models");
+    show("card-record", true);
+    openCard("card-record", { active: true });
+    await loadResults();
+    return;
+  }
+
+  state.agentRole = "A";
+  state.agentId = created.body.agents.A.agentId;
+  renderSchema(created.body.agents.A.stateSpace || state.stateSpace);
+
+  await request("POST",
+    `/interactions/${state.sessionId}/agents/${state.agentId}/register`, {
+      payload: {
+        participant: {
+          participantId: element("participant-id").value,
+          displayName: element("display-name").value,
+        },
+        client: { clientId: element("client-id").value },
+      },
+    });
+
+  if (created.body.invitation && created.body.invitation.code) {
+    element("invitation-code").textContent = created.body.invitation.code;
+    setHint("invitation", `for agent ${created.body.invitation.agentRole}`);
+    element("invitation-note").textContent =
+      `Valid until ${created.body.invitation.expiresAt}. Shown once, here: the status ` +
+      `endpoint never returns it again.`;
+    show("card-invitation", true);
+    openCard("card-invitation", { active: true });
+  }
+
+  show("card-perception", true);
+  show("card-action", true);
+  show("card-record", true);
+  openCard("card-perception");
+  startPolling();
+}
+
+async function joinInteraction() {
+  state.baseUrl = element("base-url").value.replace(/\/+$/, "");
+
+  const joined = await request("POST", "/interactions/join", {
+    payload: {
+      invitationCode: element("join-code").value.trim(),
+      participant: {
+        participantId: element("join-participant-id").value,
+        displayName: element("join-display-name").value,
+      },
+      client: { clientId: element("client-id").value },
+    },
+    authenticated: false,
+  });
+
+  if (!joined.ok) return;
+
+  state.token = joined.body.interactionToken;
+  state.sessionId = joined.body.sessionId;
+  state.agentId = joined.body.agent.agentId;
+  state.agentRole = joined.body.agent.role;
+  state.cursor = null;
+
+  renderSchema(joined.body.agent.stateSpace || state.stateSpace);
+
+  renderStatus({
+    sessionId: joined.body.sessionId,
+    status: joined.body.sessionStatus,
+    model: joined.body.model,
+    numberOfTurns: joined.body.numberOfTurns,
+    currentTurn: joined.body.currentTurn,
+  });
+
+  collapseCard("card-connect", { done: true });
+  collapseCard("card-setup", { done: false });
+  collapseCard("card-join", { done: true });
+
+  show("card-interaction", true);
+  show("card-perception", true);
+  show("card-action", true);
+  show("card-record", true);
+  openCard("card-interaction");
+  openCard("card-perception");
+  startPolling();
+}
+
+function renderStatus(interaction) {
+  const you = state.agentId
+    ? `${state.agentRole} · <span class="mono">${state.agentId.slice(0, 8)}</span>`
+    : "watching";
+
+  element("interaction-facts").innerHTML =
+    `<dt>session</dt><dd class="mono">${interaction.sessionId}</dd>` +
+    `<dt>status</dt><dd>${interaction.status}</dd>` +
+    `<dt>model</dt><dd>${interaction.model?.id ?? state.modelId}</dd>` +
+    `<dt>turn</dt><dd>${interaction.currentTurn ?? "—"} of ${interaction.numberOfTurns}</dd>` +
+    (interaction.context ? `<dt>context</dt><dd>${interaction.context}</dd>` : "") +
+    `<dt>you</dt><dd>${you}</dd>`;
+
+  setHint("interaction",
+    `${interaction.status} · turn ${interaction.currentTurn ?? "—"} of ` +
+    `${interaction.numberOfTurns}`);
+}
+
+async function refreshStatus() {
+  const result = await request("GET", `/interactions/${state.sessionId}`);
+  if (result.ok) renderStatus(result.body);
+}
+
+async function endInteraction() {
+  state.polling = false;
+  await request("POST", `/interactions/${state.sessionId}/end`, {
+    payload: { reason: "terminatedByClient" },
+  });
+  await refreshStatus();
+  await finish();
+}
+
+async function finish() {
+  collapseCard("card-perception", { done: true });
+  collapseCard("card-action", { done: true });
+  collapseCard("card-interaction", { done: true });
+  openCard("card-record", { active: true });
+  await loadResults();
+}
+
+// --------------------------------------------------------------- perception
+
+async function startPolling() {
+  if (state.polling) return;
+  state.polling = true;
+
+  while (state.polling) {
+    const parameters = { wait: LONG_POLL_SECONDS };
+    if (state.cursor) parameters.after = state.cursor;
+
+    const result = await request("GET",
+      `/interactions/${state.sessionId}/agents/${state.agentId}/perception`,
+      { parameters });
+
+    if (!result.ok) {
+      state.polling = false;
+      element("perception-note").textContent =
+        "Polling stopped after an error. The log has the problem document.";
+      return;
+    }
+
+    const perception = result.body;
+    renderPerception(perception);
+
+    if (perception.state === "interactionEnded") {
+      state.polling = false;
+      await finish();
+      return;
+    }
+
+    if (perception.state === "pending") {
+      await sleep(perception.retryAfterMilliseconds ?? 400);
+      continue;
+    }
+
+    state.cursor = perception.cursor;
+
+    if (perception.actionRequired) {
+      state.polling = false;
+      openActionForm(perception.turn);
+      return;
+    }
+  }
+}
+
+function renderPerception(perception) {
+  const tone =
+    perception.state === "actionRequired" ? "warn" :
+    perception.state === "interactionEnded" ? "bad" : "ok";
+
+  element("perception-state").innerHTML =
+    `<span class="pill ${tone}">${perception.state}</span> ` +
+    `<span class="note" style="margin:0">session ${perception.sessionStatus}` +
+    (perception.turn ? ` · turn ${perception.turn}` : "") +
+    (perception.sourceAgentId
+      ? ` · from <span class="mono">${perception.sourceAgentId.slice(0, 8)}</span>` : "") +
+    (perception.endReason ? ` · ${perception.endReason}` : "") +
+    `</span>`;
+
+  setHint("perception", perception.state);
+
+  const container = element("experience");
+  container.innerHTML = "";
+
+  if (!perception.experience) {
+    element("perception-note").textContent =
+      perception.state === "actionRequired"
+        ? "Nothing to perceive yet — you open the interaction."
+        : "";
+    return;
+  }
+
+  element("perception-note").textContent =
+    `What the partner's behavior means in your state space (${state.stateSpace}).`;
+
+  for (const [dimension, value] of Object.entries(perception.experience)) {
+    const box = document.createElement("div");
+    box.className = "value";
+    box.innerHTML =
+      `<span class="dim">${dimension}</span>` +
+      `${typeof value === "number" ? Number(value.toFixed(3)) : value}`;
+    container.appendChild(box);
+  }
+}
+
+// ------------------------------------------------------------------- action
+
+function schemaProperties() {
+  const schema = state.schemas[state.stateSpace];
+  return schema && schema.properties ? schema.properties : {};
+}
+
+function openActionForm(turn) {
+  state.pendingTurn = turn;
+
+  const properties = schemaProperties();
+  const container = element("dimensions");
+  container.innerHTML = "";
+
+  element("action-note").textContent =
+    `Turn ${turn} is yours. One field per dimension of ${state.stateSpace}, with the bounds ` +
+    `the schema declares. Out-of-range values are sent anyway, so the server's rejection is ` +
+    `visible rather than prevented here.`;
+
+  for (const [dimension, definition] of Object.entries(properties)) {
+    const integer = definition.type === "integer";
+    const minimum = definition.minimum ?? definition.exclusiveMinimum;
+    const maximum = definition.maximum ?? definition.exclusiveMaximum;
+
+    const middle = (minimum !== undefined && maximum !== undefined)
+      ? (integer ? Math.round((minimum + maximum) / 2) : (minimum + maximum) / 2)
+      : 0;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "dimension";
+    wrapper.innerHTML =
+      `<label for="dim-${dimension}">${definition.title ?? dimension} ` +
+      `<span class="hint">— ${dimension}</span></label>` +
+      `<input type="number" id="dim-${dimension}" data-dimension="${dimension}" ` +
+      `step="${integer ? 1 : "any"}" value="${middle}">` +
+      `<div class="bounds">${definition.type}` +
+      `${minimum !== undefined ? `, from ${minimum}` : ""}` +
+      `${maximum !== undefined ? ` to ${maximum}` : ""}` +
+      `${definition.description ? `<br>${definition.description}` : ""}</div>`;
+
+    container.appendChild(wrapper);
+  }
+
+  for (const input of container.querySelectorAll("input")) {
+    input.addEventListener("input", checkRanges);
+  }
+
+  checkRanges();
+  element("submit").disabled = false;
+  setHint("action", `turn ${turn} is yours`);
+  openCard("card-action", { active: true });
+}
+
+function checkRanges() {
+  const properties = schemaProperties();
+  const outside = [];
+
+  for (const input of element("dimensions").querySelectorAll("input")) {
+    const dimension = input.dataset.dimension;
+    const definition = properties[dimension] ?? {};
+    const value = Number(input.value);
+
+    const tooLow =
+      (definition.minimum !== undefined && value < definition.minimum) ||
+      (definition.exclusiveMinimum !== undefined && value <= definition.exclusiveMinimum);
+    const tooHigh =
+      (definition.maximum !== undefined && value > definition.maximum) ||
+      (definition.exclusiveMaximum !== undefined && value >= definition.exclusiveMaximum);
+    const notInteger = definition.type === "integer" && !Number.isInteger(value);
+
+    const bad = tooLow || tooHigh || notInteger;
+    input.parentElement.classList.toggle("out-of-range", bad);
+    if (bad) outside.push(dimension);
+  }
+
+  const warning = element("range-warning");
+  warning.classList.toggle("hidden", outside.length === 0);
+  warning.textContent = outside.length
+    ? `${outside.join(", ")} outside the schema. Submit to see how the API answers.`
+    : "";
+}
+
+async function submitBehavior() {
+  const behavior = {};
+
+  for (const input of element("dimensions").querySelectorAll("input")) {
+    behavior[input.dataset.dimension] = Number(input.value);
+  }
+
+  element("submit").disabled = true;
+
+  const result = await request("POST",
+    `/interactions/${state.sessionId}/agents/${state.agentId}/actions`, {
+      payload: {
+        actionId: crypto.randomUUID(),
+        turn: state.pendingTurn,
+        behavior,
+      },
+    });
+
+  if (!result.ok) {
+    element("submit").disabled = false;
+    return;
+  }
+
+  element("action-note").textContent =
+    `Accepted for turn ${result.body.turn}. Waiting for the partner.`;
+  element("dimensions").innerHTML = "";
+  element("range-warning").classList.add("hidden");
+
+  setHint("action", `turn ${result.body.turn} submitted`);
+  collapseCard("card-action", { done: true });
+  openCard("card-perception");
+
+  await refreshStatus();
+  startPolling();
+}
+
+// ------------------------------------------------------------------ results
+
+async function loadResults() {
+  const result = await request("GET", `/interactions/${state.sessionId}/results`);
+
+  if (!result.ok) {
+    element("record-facts").innerHTML =
+      "<dt>record</dt><dd>none — persistence was off, or the interaction is not finished</dd>";
+    setHint("record", "no record");
+    return;
+  }
+
+  const results = result.body;
+  const folder = results.resultsFolder;
+
+  element("record-facts").innerHTML =
+    `<dt>status</dt><dd>${results.status}</dd>` +
+    `<dt>turns</dt><dd>${results.turns.length} of ${results.numberOfTurns}</dd>` +
+    `<dt>ITP messages</dt><dd>${results.itpMessages.length}</dd>` +
+    `<dt>context</dt><dd>${results.context}</dd>` +
+    `<dt>written to</dt><dd class="mono">` +
+    `${folder ? `results/${folder}/` : "not written to disk"}</dd>`;
+
+  setHint("record", folder ? `results/${folder}/` : `${results.turns.length} turns`);
+
+  const roles = {};
+  for (const [role, agent] of Object.entries(results.agents)) {
+    roles[agent.agentId] = `${role} (${agent.type})`;
+  }
+
+  let table = "<table><tr><th>turn</th><th>actor</th><th>behavior</th></tr>";
+
+  for (const turn of results.turns) {
+    table +=
+      `<tr><td>${turn.turn}</td>` +
+      `<td>${roles[turn.actorAgentId] ?? turn.actorAgentId.slice(0, 8)}</td>` +
+      `<td class="mono">${JSON.stringify(turn.behavior)}</td></tr>`;
+  }
+
+  element("record-turns").innerHTML = table + "</table>";
+  element("record-messages").textContent = JSON.stringify(results.itpMessages, null, 2);
+}
+
+// ------------------------------------------------------------------- wiring
+
+element("connect").addEventListener("click", connect);
+element("create").addEventListener("click", createInteraction);
+element("join").addEventListener("click", joinInteraction);
+element("submit").addEventListener("click", submitBehavior);
+element("refresh-status").addEventListener("click", refreshStatus);
+element("end").addEventListener("click", endInteraction);
+element("load-results").addEventListener("click", loadResults);
+element("clear-log").addEventListener("click", () => {
+  element("log").innerHTML = "";
+  state.calls = 0;
+  setHint("log", "0 calls");
+});
+element("state-space").addEventListener("change", (event) => renderSchema(event.target.value));
+
+element("flow").addEventListener("change", (event) => {
+  const watching = event.target.value === "model-model";
+  element("state-space").disabled = watching;
+  element("participant-id").disabled = watching;
+  element("display-name").disabled = watching;
+});
+
+connect();
+</script>
+
+</body>
+</html>

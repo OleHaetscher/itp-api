@@ -17,12 +17,12 @@
             "description": "Influence, control, or mastery, ranging from submissive or unassured to dominant or assured.",
             "range": {
               "minimum": 1,
-              "maximum": 5
+              "maximum": 7
             },
             "labels": {
               "1": "Very low agency",
-              "3": "Neutral agency",
-              "5": "Very high agency"
+              "4": "Neutral agency",
+              "7": "Very high agency"
             }
           },
           {
@@ -31,12 +31,12 @@
             "description": "Closeness, intimacy, affiliation, or warmth, ranging from hostile or cold to friendly or warm.",
             "range": {
               "minimum": 1,
-              "maximum": 5
+              "maximum": 7
             },
             "labels": {
               "1": "Very low communion",
-              "3": "Neutral communion",
-              "5": "Very high communion"
+              "4": "Neutral communion",
+              "7": "Very high communion"
             }
           }
         ]

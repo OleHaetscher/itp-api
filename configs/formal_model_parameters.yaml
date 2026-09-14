@@ -1,0 +1,64 @@
+# Parameter configurations for formal models
+
+lassi_formal_model:
+
+  # Shared settings, applied to every axis.
+  #
+  # All positions in this file are on the ITP 1-based scale 1 ... num_states,
+  # the scale ITP messages carry. The model converts them to its internal
+  # centered grid -(N-1)/2 ... +(N-1)/2 when an axis is built. The sister
+  # implementation in the lassi_simulations repository states its behavioral
+  # defaults on the same scale, so a value can be moved between the two repos
+  # without reinterpretation.
+  #
+  # num_states: number of discrete states per axis, odd and at least 3. The
+  #   agency-communion state space and the ac <-> ipc converters are built for
+  #   7 states, so only change this for visualization or exploration, not for
+  #   ITP message exchange.
+  # tau: width of the habitual repertoire, in grid steps. Orthogonal to the
+  #   state level: it sets how broad the person's behavior is around their
+  #   default, not where that default sits.
+  # lambda_relax: fraction of the way the expected state travels toward its
+  #   target per exchange, in (0, 1]. (1 - lambda_relax) is the AR(1)
+  #   coefficient, so 1.0 leaves no behavioral inertia at all. The simulation
+  #   repository runs 0.5 as its main condition, where the previous state and
+  #   the pull toward default and partner carry equal weight.
+  num_states: 7
+  tau: 1.0
+  lambda_relax: 0.5
+
+  # Per-axis settings.
+  #
+  # name: readable axis name.
+  # BD: behavioral default, on the ITP scale, strictly inside (1, num_states).
+  #   It is the mean of the repertoire, not a separate target. A default at an
+  #   endpoint is rejected, because placing the mean there needs an infinite
+  #   tilt.
+  # IR: signed interpersonal reactivity in [-1, +1]. Its magnitude is the weight
+  #   the update places on the partner-implied target against the behavioral
+  #   default; its sign is the response direction. +1 is full complementarity,
+  #   0 the behavioral default alone, -1 full anti-complementarity. An agent who
+  #   answers dominance with dominance has IR < 0, not a flipped axis sign.
+  # complementarity_direction: the axis sign m, saying what complementarity
+  #   means on this axis. -1 for agency, where it is reciprocity (dominance
+  #   invites submission), +1 for communion, where it is correspondence (warmth
+  #   invites warmth). A property of the axis, never of the person, and never
+  #   estimated.
+  # deterministic: whether the expressed state is the mode of the state
+  #   distribution instead of a draw from it. Drawing is the model as studied;
+  #   the mode makes a demo run reproducible without seeding.
+  axes:
+
+    A:
+      name: Agency
+      BD: 5.0
+      IR: 0.5
+      complementarity_direction: -1.0
+      deterministic: false
+
+    C:
+      name: Communion
+      BD: 5.0
+      IR: 0.5
+      complementarity_direction: 1.0
+      deterministic: false
