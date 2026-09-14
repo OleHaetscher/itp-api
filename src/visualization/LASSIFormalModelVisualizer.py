@@ -62,6 +62,16 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
         "C": ("extreme cold", "extreme warm"),
     }
 
+    # The colour each axis is drawn in. The state the agent is in now carries
+    # the colour of its axis, so the same figure reads as agency or as
+    # communion without the caption having to say which. Everything that is not
+    # the current state keeps its role colour, which does not change with the
+    # axis. See BaseVisualizer for where the pair comes from.
+    AXIS_COLORS = {
+        "A": FormalModelVisualizer.AGENCY,
+        "C": FormalModelVisualizer.COMMUNION,
+    }
+
     NUM_STATES_MIN = 3
     NUM_STATES_MAX = 15
 
@@ -471,11 +481,13 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
             ),
         )
 
+        axis_color = self.axis_color(record=record)
+
         markers = (
             ("E[S₍ₜ₋₁₎]  before", record["mu_prev"], self.PRIOR, "circle"),
             ("BD  default", record["BD"], self.DEFAULT, "square"),
             ("T  partner target", record["partner_target"], self.PARTNER, "diamond"),
-            ("E[Sₜ]  after", record["mu_t"], self.POSTERIOR, "star"),
+            ("E[Sₜ]  after", record["mu_t"], axis_color, "star"),
         )
 
         for row, (label, value, color, symbol) in enumerate(markers):
@@ -585,6 +597,7 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
 
         num_states = record["num_states"]
         complementary = record["direction"] > 0.0
+        axis_color = self.axis_color(record=record)
 
         figure = go.Figure()
 
@@ -601,7 +614,7 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
             (
                 "T  complementary  (d = +1)",
                 record["target_complementary"],
-                self.POSTERIOR if complementary else self.MUTED,
+                axis_color if complementary else self.MUTED,
                 "star" if complementary else "circle-open",
                 complementary,
                 2,
@@ -609,7 +622,7 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
             (
                 "T  anti-complementary  (d = −1)",
                 record["target_anti"],
-                self.MUTED if complementary else self.POSTERIOR,
+                self.MUTED if complementary else axis_color,
                 "circle-open" if complementary else "star",
                 not complementary,
                 1,
@@ -617,7 +630,7 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
             (
                 f"E[Sₜ] at |IR| = {record['IR_abs']:.2f}",
                 record["mu_t"],
-                self.POSTERIOR,
+                axis_color,
                 "star",
                 True,
                 0,
@@ -682,6 +695,7 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
 
         num_states = record["num_states"]
         grid = to_itp_scale(record["grid"], num_states)
+        axis_color = self.axis_color(record=record)
 
         figure = go.Figure()
 
@@ -690,8 +704,7 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
                 x=grid,
                 y=record["repertoire"],
                 name="h  repertoire (mean = BD)",
-                marker_color=self.PRIOR,
-                opacity=0.7,
+                marker_color=self.tint(color=axis_color, opacity=0.3),
                 hovertemplate="h(%{x:.0f}) = %{y:.4f}<extra></extra>",
             )
         )
@@ -701,7 +714,7 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
                 y=record["p_prev"],
                 name="p₍ₜ₋₁₎  before",
                 mode="lines+markers",
-                line=dict(color=self.MUTED, width=2, dash="dot"),
+                line=dict(color=self.PRIOR, width=2, dash="dot"),
                 marker=dict(size=7),
                 hovertemplate="p₍ₜ₋₁₎(%{x:.0f}) = %{y:.4f}<extra></extra>",
             )
@@ -712,7 +725,7 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
                 y=record["p_new"],
                 name="pₜ  after",
                 mode="lines+markers",
-                line=dict(color=self.POSTERIOR, width=3),
+                line=dict(color=axis_color, width=3),
                 marker=dict(size=9),
                 hovertemplate="pₜ(%{x:.0f}) = %{y:.4f}<extra></extra>",
             )
@@ -720,7 +733,7 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
 
         for label, value, color in (
             ("BD", record["BD"], self.DEFAULT),
-            ("E[Sₜ]", record["mu_t"], self.POSTERIOR),
+            ("E[Sₜ]", record["mu_t"], axis_color),
         ):
             figure.add_vline(
                 x=float(to_itp_scale(value, num_states)),
@@ -776,6 +789,7 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
 
         num_states = record["num_states"]
         trajectory = to_itp_scale(record["trajectory"], num_states)
+        axis_color = self.axis_color(record=record)
 
         figure = go.Figure()
 
@@ -784,7 +798,7 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
                 x=list(range(len(trajectory))),
                 y=trajectory,
                 mode="lines+markers",
-                line=dict(color=self.POSTERIOR, width=3),
+                line=dict(color=axis_color, width=3),
                 marker=dict(size=7),
                 showlegend=False,
                 hovertemplate="exchange %{x}: %{y:.4f}<extra></extra>",
@@ -880,6 +894,22 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
             return "middle left", "{}  "
 
         return "middle right", "  {}"
+
+    def axis_color(
+        self,
+        record: dict[str, Any],
+    ) -> str:
+        """
+        Return the colour of the axis the step record belongs to.
+
+        Args:
+            record: Step record of the update.
+
+        Returns:
+            Colour of the axis.
+        """
+
+        return self.AXIS_COLORS.get(record["dimension"], self.PRIMARY)
 
     def state_axis_title(
         self,
