@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -89,3 +90,22 @@ def prepare_message_for_target(
         )
 
     return converter.convert_message(message)
+
+def make_iso_timestamp() -> str:
+    """
+    Create an ISO 8601 timestamp in UTC.
+
+    The ITP API specification requires all API timestamps in this format.
+
+    Args:
+
+    Returns:
+        Timestamp, for example "2026-07-31T08:45:00Z".
+    """
+
+    return (
+        datetime.now(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )

@@ -12,4 +12,5 @@
 results/
 
 CLAUDE.md
-docs/
+
+.pytest_cache/
