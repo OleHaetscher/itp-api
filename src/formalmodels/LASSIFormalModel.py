@@ -1,31 +1,49 @@
 """
 LASSI-style agency-communion formal model.
 
-Each interpersonal axis carries a discrete probability distribution p over an
-integer state grid 0 ... num_states - 1. One update step is:
+Each interpersonal axis carries a discrete probability distribution p over a
+symmetric, zero-centered integer state grid -(N - 1)/2 ... +(N - 1)/2. One
+exchange moves the mean of that distribution toward a convex mixture of three
+states, and the distribution itself is then the agent's habitual repertoire,
+minimally deformed to have exactly that mean:
 
-    delta_BD = w_BD * (BD - E[S_t-1])                 behavioral-default pull
-    delta_C  = w_C * m * (partner_state - midpoint)   complementarity
-    delta_IR = IR * delta_C                           reactivity-moderated
+    IR_abs = |IR|                                    reactivity magnitude
+    d      = +1 if IR >= 0 else -1                   response direction
+    T      = s_bar + d * m * (s_other - s_bar)       partner-implied target
+    mu_t   = (1 - lam) * mu_t-1 + lam * ((1 - IR_abs) * BD + IR_abs * T)
+    p_t    = argmin_p KL(p || h)  subject to  E_p[S] = mu_t
 
-    E[S_t] = clip(E[S_t-1] + delta_BD + delta_IR, state_min, state_max)
-    drift  = E[S_t] - E[S_t-1]
+with m = -1 for agency and m = +1 for communion. The projection has the closed
+form p_t = h * exp(eta * s) / Z, the exponential tilt of the repertoire with the
+single eta that puts the mean at mu_t. Two properties follow, and both are
+load-bearing: the realised mean equals the intended mean to solver precision,
+and mu_t is a convex combination of three states that already lie on the grid,
+so it can never leave it and nothing is ever clipped.
 
-    p_t = p_t-1 @ K(drift)
+Reactivity is signed. Its magnitude is the weight on the partner, its sign is
+the direction of the response: IR = +1 is full complementarity, IR = 0 the
+behavioral default alone, IR = -1 full anti-complementarity. The complementarity
+direction m is a property of the axis and says what complementarity *means*
+there; the sign of IR is a property of the person and says which way this agent
+answers. Keeping them apart is what lets one dyad hold a complementary and an
+anti-complementary responder at the same time.
 
-with m = -1 for agency and m = +1 for communion, and K a row-stochastic
-Gaussian transport kernel. Complementarity enters only through delta_IR, so an
-axis with IR = 0 ignores the partner entirely.
+Scale convention: the parameters in configs/formal_model_parameters.yaml are on
+the ITP 1-based scale 1 ... N, the scale ITP messages carry. They are converted
+to the internal centered grid when an axis is built, and back in to_itp_state.
 
-Scale convention: all parameters and states in this module are on the internal
-0-based grid, including BD. Conversion to and from the ITP 1-based "ac" scale
-happens only in to_itp_state and to_internal_state.
-
-Parameters are read from configs/formal_model_parameters.yaml.
+This module is a separate implementation of the model in the lassi_simulations
+repository, not a shared package. The normative description is
+handoff/formal-model-spec.md there; tests/data/lassi_test_vectors.json is a copy
+of its conformance vectors, and tests/test_lassi_formal_model.py runs them
+against this implementation. When the model changes there, the vectors are
+regenerated and this implementation has to be checked against the new file.
+Nothing detects the divergence on its own.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -36,12 +54,32 @@ from src.utils.utilfuncs import load_config
 LASSI_CONFIG_NAME = "formal_model_parameters.yaml"
 LASSI_CONFIG_KEY = "lassi_formal_model"
 
-# Config settings that are shared by all axes and flattened into each axis.
-LASSI_SHARED_PARAMETERS = (
-    "num_states",
-    "sigma_floor_steps",
-    "boundary_stickiness",
-)
+# Config key holding the per-axis settings. Everything beside it is shared by
+# all axes and flattened into each of them.
+LASSI_AXES_KEY = "axes"
+
+# Convergence tolerance of the tilt solve, in grid units. The mean is solved to
+# machine precision in practice; this is where the iteration stops.
+SOLVER_TOLERANCE = 1e-13
+
+# Iteration cap of the safeguarded Newton solve. Newton on an exact derivative
+# converges in three or four steps from a cold start, so this is a runaway guard
+# rather than a working limit.
+SOLVER_MAX_ITERATIONS = 100
+
+# Cap on the number of doublings in the bracket search. The bound reached after
+# k doublings is 2**(k+1) - 1, so this permits |eta| past 1e18. A fixed bracket
+# would be a bug: the tilt needed to move a width-tau repertoire grows like
+# (mu - BD) / tau**2, so any constant silently rejects legitimate interior
+# targets at some repertoire width.
+BRACKET_MAX_DOUBLINGS = 60
+
+# How close to a grid endpoint a target mean has to be before it is treated as
+# being *at* the endpoint, where the projection is the point mass rather than a
+# finite tilt. Floating-point slack, not a modelling choice: an exact endpoint
+# target arises whenever a fully reactive agent answers a partner who expressed
+# an extreme state.
+ENDPOINT_TOLERANCE = 1e-12
 
 
 def load_lassi_parameters() -> dict[str, dict[str, Any]]:
@@ -57,37 +95,90 @@ def load_lassi_parameters() -> dict[str, dict[str, Any]]:
     config = load_config(LASSI_CONFIG_NAME)[LASSI_CONFIG_KEY]
 
     shared = {
-        parameter: config[parameter]
-        for parameter in LASSI_SHARED_PARAMETERS
+        parameter: value
+        for parameter, value in config.items()
+        if parameter != LASSI_AXES_KEY
     }
 
     return {
         dimension: {**shared, **axis_parameters}
-        for dimension, axis_parameters in config["axes"].items()
+        for dimension, axis_parameters in config[LASSI_AXES_KEY].items()
     }
 
 
-def _normalize(
-    probabilities: np.ndarray,
-    epsilon: float = 1e-12,
+def build_state_grid(
+    num_states: int,
 ) -> np.ndarray:
     """
-    Normalize a probability vector.
+    Build the symmetric, zero-centered state grid of one axis.
 
     Args:
-        probabilities: Probability vector.
-        epsilon: Lower bound below which the total is treated as zero.
+        num_states: Number of discrete states, expected to be odd.
+
+    Returns:
+        The grid -(num_states - 1)/2 ... +(num_states - 1)/2.
+    """
+
+    return np.arange(num_states, dtype=float) - (num_states - 1) / 2
+
+
+def to_itp_scale(
+    values: Any,
+    num_states: int,
+) -> np.ndarray:
+    """
+    Map internal centered grid values to the ITP 1-based scale.
+
+    Args:
+        values: Values on the internal grid.
+        num_states: Number of discrete states.
+
+    Returns:
+        Values on the ITP scale.
+    """
+
+    return np.asarray(values, dtype=float) + (num_states + 1) / 2
+
+
+def to_internal_scale(
+    values: Any,
+    num_states: int,
+) -> np.ndarray:
+    """
+    Map ITP 1-based scale values to the internal centered grid.
+
+    Args:
+        values: Values on the ITP scale.
+        num_states: Number of discrete states.
+
+    Returns:
+        Values on the internal grid.
+    """
+
+    return np.asarray(values, dtype=float) - (num_states + 1) / 2
+
+
+def _normalize_log(
+    log_weights: np.ndarray,
+) -> np.ndarray:
+    """
+    Turn unnormalized log weights into a probability vector.
+
+    Working in log space is what keeps a narrow repertoire representable: a
+    width of 0.1 on a seven-point grid puts exp(-450) on the end states, which
+    underflows to zero if the weights are exponentiated before the shift applied
+    here.
+
+    Args:
+        log_weights: Unnormalized log weights over the state grid.
 
     Returns:
         Normalized probability vector.
     """
 
-    total = probabilities.sum()
+    weights = np.exp(log_weights - log_weights.max())
 
-    if total < epsilon:
-        return probabilities
-
-    return probabilities / total
+    return weights / weights.sum()
 
 
 def _expectation(
@@ -108,137 +199,132 @@ def _expectation(
     return float(np.dot(grid, probabilities))
 
 
-def _bell_curve(
-    grid: np.ndarray,
-    mean: float,
-    sigma: float,
-) -> np.ndarray:
+def _bracket_tilt(
+    mean_at: Callable[[float], float],
+    target_mean: float,
+) -> tuple[float, float]:
     """
-    Create a bell-shaped probability vector over a grid.
+    Find a bracket around the tilt that attains a target mean.
+
+    Searched outward from zero by doubling rather than assumed, because no fixed
+    bracket is correct at every repertoire width. The search stops when the
+    tilted mean stops responding, which is the floating-point signature of a
+    target at a grid endpoint, where the tilt is genuinely infinite and the
+    projection is the point mass instead.
 
     Args:
-        grid: Discrete state grid.
-        mean: Mean of the bell curve.
-        sigma: Width of the bell curve.
+        mean_at: Tilted mean as a function of the tilt, strictly increasing.
+        target_mean: Mean to bracket.
 
     Returns:
-        Bell-shaped probability vector.
+        Bracket (lower, upper) with mean_at(lower) <= target <= mean_at(upper).
     """
 
-    values = np.exp(-((grid - mean) ** 2) / (2 * sigma**2))
+    previous = mean_at(0.0)
 
-    return _normalize(values)
+    if previous == target_mean:
+        return 0.0, 0.0
+
+    direction = 1.0 if previous < target_mean else -1.0
+    inner, outer, step = 0.0, direction, 1.0
+
+    for _ in range(BRACKET_MAX_DOUBLINGS):
+        current = mean_at(outer)
+
+        if (current - target_mean) * direction >= 0.0:
+            return (inner, outer) if direction > 0.0 else (outer, inner)
+
+        if current == previous:
+            raise ValueError(
+                f"The tilted mean saturates at {current} before reaching "
+                f"{target_mean}, so no finite tilt attains it. Either the "
+                "target is at a grid endpoint, where the projection is the "
+                "point mass rather than a tilt, or the repertoire has "
+                "underflowed to zero on the outer states, which happens below "
+                "about tau = 0.08 on a unit-step grid."
+            )
+
+        inner, previous = outer, current
+        step *= 2.0
+        outer += direction * step
+
+    raise ValueError(
+        f"Could not bracket a tilt for target mean {target_mean} within "
+        f"{BRACKET_MAX_DOUBLINGS} doublings."
+    )
 
 
-def _reflect(
-    value: float,
-    lower: float,
-    upper: float,
+def _solve_tilt(
+    log_weights: np.ndarray,
+    grid: np.ndarray,
+    target_mean: float,
 ) -> float:
     """
-    Reflect a value back into an interval.
+    Solve for the tilt whose tilted mean equals a target.
+
+    Safeguarded Newton on the exponential-family identity dE[S]/d_eta = Var[S],
+    which is exact. A Newton step that leaves the bracket or fails to reduce the
+    error is replaced by a bisection, which keeps the solve robust where the
+    family is nearly degenerate and the variance underflows.
+
+    Every strictly interior target is reachable at a unique finite tilt: E[S] is
+    continuous and strictly increasing in eta, with the grid endpoints as its
+    limits, so it is a bijection onto the open grid interval.
 
     Args:
-        value: Value to reflect.
-        lower: Lower bound of the interval.
-        upper: Upper bound of the interval.
-
-    Returns:
-        Reflected value inside the interval.
-    """
-
-    if lower == upper:
-        return lower
-
-    span = upper - lower
-    remainder = (value - lower) % (2 * span)
-
-    if remainder <= span:
-        return lower + remainder
-
-    return upper - (remainder - span)
-
-
-def _kernel_sigma(
-    grid: np.ndarray,
-    sigma: float,
-    sigma_floor_steps: float,
-) -> float:
-    """
-    Compute the effective kernel width for a grid.
-
-    The floor keeps the kernel wide enough to spread mass across neighboring
-    states, so that a narrow sigma cannot collapse the distribution onto a
-    single state.
-
-    Args:
+        log_weights: Unnormalized log weights of the repertoire.
         grid: Discrete state grid.
-        sigma: Requested kernel width.
-        sigma_floor_steps: Lower bound on the kernel width, in grid steps.
+        target_mean: Mean to attain.
 
     Returns:
-        Effective kernel width.
+        Tilt attaining the target mean.
     """
 
-    step = float(np.median(np.diff(grid))) if len(grid) > 1 else 1.0
+    state_min, state_max = float(grid[0]), float(grid[-1])
 
-    return max(float(sigma), sigma_floor_steps * step)
-
-
-def _gaussian_transport_kernel(
-    grid: np.ndarray,
-    drift: float,
-    sigma: float,
-    boundary_stickiness: float,
-) -> np.ndarray:
-    """
-    Create a row-stochastic Gaussian transition kernel over a discrete grid.
-
-    Each source state is shifted by the drift. Because the shifted target can
-    fall outside the grid, every row blends a Gaussian centered on the clipped
-    target with a Gaussian centered on the reflected target. Clipping piles
-    mass up at the boundary, reflection pushes it back inward, and
-    boundary_stickiness weights the two.
-
-    Args:
-        grid: Discrete state grid.
-        drift: Mean shift applied to each source state.
-        sigma: Effective width of the Gaussian transition.
-        boundary_stickiness: Weight of the clipped Gaussian, between 0 and 1.
-
-    Returns:
-        Transition matrix whose rows sum to 1.
-    """
-
-    n_states = len(grid)
-    transition_matrix = np.empty((n_states, n_states), dtype=float)
-
-    state_min = float(grid[0])
-    state_max = float(grid[-1])
-    stickiness = float(np.clip(boundary_stickiness, 0.0, 1.0))
-
-    for source_index in range(n_states):
-        target_mean = float(grid[source_index]) + drift
-
-        clipped_mean = float(np.clip(target_mean, state_min, state_max))
-        reflected_mean = _reflect(
-            value=target_mean,
-            lower=state_min,
-            upper=state_max,
+    if not state_min < target_mean < state_max:
+        raise ValueError(
+            f"Target mean {target_mean} must lie strictly inside the grid "
+            f"({state_min}, {state_max}); an endpoint needs an infinite tilt."
         )
 
-        row = stickiness * np.exp(
-            -((grid - clipped_mean) ** 2) / (2 * sigma**2)
-        ) + (1.0 - stickiness) * np.exp(
-            -((grid - reflected_mean) ** 2) / (2 * sigma**2)
-        )
+    def mean_at(eta: float) -> float:
+        """
+        Compute the mean of the repertoire tilted by eta.
 
-        if row.sum() > 0:
-            transition_matrix[source_index, :] = _normalize(row)
+        Args:
+            eta: Tilt applied to the repertoire.
+
+        Returns:
+            Mean of the tilted distribution.
+        """
+
+        return _expectation(grid, _normalize_log(log_weights + eta * grid))
+
+    lower, upper = _bracket_tilt(mean_at=mean_at, target_mean=target_mean)
+    eta = 0.0
+
+    for _ in range(SOLVER_MAX_ITERATIONS):
+        probabilities = _normalize_log(log_weights + eta * grid)
+        mean = _expectation(grid, probabilities)
+        error = mean - target_mean
+
+        if abs(error) < SOLVER_TOLERANCE:
+            return eta
+
+        if error < 0.0:
+            lower = eta
         else:
-            transition_matrix[source_index, :] = np.full(n_states, 1.0 / n_states)
+            upper = eta
 
-    return transition_matrix
+        variance = float(np.dot(grid**2, probabilities) - mean**2)
+        step = eta - error / variance if variance > 0.0 else 0.5 * (lower + upper)
+        eta = step if lower < step < upper else 0.5 * (lower + upper)
+
+    raise ValueError(
+        f"Tilt solve did not converge to {SOLVER_TOLERANCE:g} for target mean "
+        f"{target_mean} in {SOLVER_MAX_ITERATIONS} iterations."
+    )
 
 
 class LASSIAxis:
@@ -258,6 +344,14 @@ class LASSIAxis:
         """
         Initialize a LASSI interpersonal axis.
 
+        The repertoire is built here and never rebuilt: it is a symmetric bell
+        of width tau, tilted once so that its mean is exactly BD. The obvious
+        formula h(s) ~ exp(-(s - BD)**2 / (2 * tau**2)) is *not* the right one,
+        because on a finite grid truncation pulls its mean toward the center: on
+        the -3 ... +3 grid, BD = 2 and tau = 1.5 give a mean of 1.572. Building
+        it any other way breaks the IR = 0 case, where the update has to return
+        the repertoire untilted.
+
         Args:
             dimension: Axis abbreviation.
             parameters: Axis parameters, as returned by load_lassi_parameters.
@@ -269,33 +363,38 @@ class LASSIAxis:
         self.name = parameters["name"]
 
         self.num_states = int(parameters["num_states"])
-        self.state_min = 0.0
-        self.state_max = float(self.num_states - 1)
-        self.state_grid = np.arange(self.num_states, dtype=float)
+        self.state_grid = build_state_grid(num_states=self.num_states)
+        self.state_min = float(self.state_grid[0])
+        self.state_max = float(self.state_grid[-1])
         self.midpoint = (self.state_min + self.state_max) / 2
 
-        self.BD = float(parameters["BD"])
-        self.w_BD = float(parameters["w_BD"])
-        self.w_C = float(parameters["w_C"])
+        self.BD = float(to_internal_scale(parameters["BD"], self.num_states))
+        self.tau = float(parameters["tau"])
         self.IR = float(parameters["IR"])
-        self.sigma = float(parameters["sigma"])
+        self.lambda_relax = float(parameters["lambda_relax"])
         self.complementarity_direction = float(parameters["complementarity_direction"])
         self.deterministic = bool(parameters["deterministic"])
 
-        self.sigma_floor_steps = float(parameters["sigma_floor_steps"])
-        self.boundary_stickiness = float(parameters["boundary_stickiness"])
+        self.validate_parameters()
 
-        self.sigma_eff = _kernel_sigma(
+        symmetric = -0.5 * (self.state_grid / self.tau) ** 2
+        self._repertoire_log_weights = symmetric + self.state_grid * _solve_tilt(
+            log_weights=symmetric,
             grid=self.state_grid,
-            sigma=self.sigma,
-            sigma_floor_steps=self.sigma_floor_steps,
+            target_mean=self.BD,
         )
+        self.repertoire = _normalize_log(self._repertoire_log_weights)
+
+        # The realised mean rather than the configured one, so that BD and the
+        # repertoire cannot disagree by the solver tolerance. Everything
+        # downstream reads BD from here.
+        self.BD = _expectation(self.state_grid, self.repertoire)
 
         self.prior_state_dist = None
-        self.transition_matrix = None
-        self.drift_components = {}
+        self.step_components = {}
 
-        self.set_state_dist_from_mean(mean=self.BD)
+        self.state_dist = self.repertoire
+        self.state = self.next_state()
 
     @classmethod
     def from_config(
@@ -322,6 +421,96 @@ class LASSIAxis:
             parameters=parameters[dimension],
         )
 
+    @property
+    def IR_abs(
+        self,
+    ) -> float:
+        """
+        Return the magnitude of the signed reactivity.
+
+        Args:
+
+        Returns:
+            Weight the update places on the partner-implied target.
+        """
+
+        return abs(self.IR)
+
+    @property
+    def direction(
+        self,
+    ) -> float:
+        """
+        Return the response direction of the signed reactivity.
+
+        Zero is mapped to +1 rather than to 0, so that a non-reactive agent is
+        the |IR| = 0 limit of the complementary branch rather than a third case.
+        The direction is multiplied by a weight of zero there, so the choice
+        affects only the reported partner target, never the update.
+
+        Args:
+
+        Returns:
+            +1 for a complementary responder, -1 for an anti-complementary one.
+        """
+
+        return 1.0 if self.IR >= 0.0 else -1.0
+
+    def validate_parameters(
+        self,
+    ) -> None:
+        """
+        Validate the axis parameters.
+
+        The complementarity direction and the odd state count are conditions the
+        reference implementation states but does not check, on the grounds that
+        they are architectural facts of the scale. They are checked here because
+        this axis is built from editable config and from dashboard controls, and
+        because a violation surfaces far away from its cause: a complementarity
+        direction other than +-1 scales the partner state off the grid, and the
+        projection then reports a target it cannot reach.
+
+        Args:
+
+        Returns:
+        """
+
+        if self.num_states < 3 or self.num_states % 2 == 0:
+            raise ValueError(
+                f"num_states must be odd and at least 3, got {self.num_states}; "
+                "the agency-communion scale has a neutral middle state."
+            )
+
+        if self.tau <= 0.0:
+            raise ValueError(f"tau is a width and must be positive, got {self.tau}")
+
+        if not self.state_min < self.BD < self.state_max:
+            raise ValueError(
+                f"BD must lie strictly inside the ITP scale "
+                f"(1, {self.num_states}), got "
+                f"{float(to_itp_scale(self.BD, self.num_states))}; a default at "
+                "an endpoint would need an infinite tilt."
+            )
+
+        if not -1.0 <= self.IR <= 1.0:
+            raise ValueError(
+                f"IR is a signed convex weight and must lie in [-1, 1], got "
+                f"{self.IR}"
+            )
+
+        if not 0.0 < self.lambda_relax <= 1.0:
+            raise ValueError(
+                f"lambda_relax is a relaxation rate and must lie in (0, 1], got "
+                f"{self.lambda_relax}"
+            )
+
+        if self.complementarity_direction not in (-1.0, 1.0):
+            raise ValueError(
+                f"complementarity_direction must be -1 or +1, got "
+                f"{self.complementarity_direction}; it is the axis sign, and an "
+                "agent who answers dominance with dominance has IR < 0 instead."
+            )
+
     def parameters(
         self,
     ) -> dict[str, Any]:
@@ -329,7 +518,8 @@ class LASSIAxis:
         Return the axis parameters.
 
         The result can be passed back into LASSIAxis, which makes it a
-        convenient starting point for parameter variations.
+        convenient starting point for parameter variations. BD is returned on
+        the ITP scale, which is the scale it is given on.
 
         Args:
 
@@ -340,37 +530,155 @@ class LASSIAxis:
         return {
             "name": self.name,
             "num_states": self.num_states,
-            "BD": self.BD,
-            "w_BD": self.w_BD,
-            "w_C": self.w_C,
+            "BD": float(to_itp_scale(self.BD, self.num_states)),
+            "tau": self.tau,
             "IR": self.IR,
-            "sigma": self.sigma,
+            "lambda_relax": self.lambda_relax,
             "complementarity_direction": self.complementarity_direction,
             "deterministic": self.deterministic,
-            "sigma_floor_steps": self.sigma_floor_steps,
-            "boundary_stickiness": self.boundary_stickiness,
         }
+
+    def tilt(
+        self,
+        eta: float,
+    ) -> np.ndarray:
+        """
+        Exponentially tilt the repertoire.
+
+        Args:
+            eta: Tilt applied to the repertoire. Zero returns the repertoire.
+
+        Returns:
+            Tilted probability vector.
+        """
+
+        return _normalize_log(self._repertoire_log_weights + eta * self.state_grid)
+
+    def project(
+        self,
+        target_mean: float,
+    ) -> tuple[np.ndarray, float]:
+        """
+        Find the distribution closest to the repertoire with a given mean.
+
+        This is the whole content of the update. For an interior target the
+        solution is the exponential tilt. At either grid endpoint the feasible
+        set holds exactly one distribution, the point mass there, since no other
+        distribution on the grid has a mean that extreme; that point mass is
+        therefore the projection, and it is the limit of the tilt as eta runs to
+        infinity. Returning it is exact rather than a fallback, and it is
+        reached in normal use: at |IR| = 1 and lambda_relax = 1 the agent takes
+        its partner's expressed state, mirrored or copied, as its target.
+
+        Args:
+            target_mean: Mean the result must have, inside the closed grid.
+
+        Returns:
+            Projected probability vector and the tilt that produced it, which is
+            infinite at an endpoint.
+        """
+
+        if target_mean <= self.state_min + ENDPOINT_TOLERANCE:
+            if target_mean < self.state_min - ENDPOINT_TOLERANCE:
+                raise ValueError(
+                    f"Target mean {target_mean} is below the grid at "
+                    f"{self.state_min}."
+                )
+
+            return self._point_mass(index=0), -np.inf
+
+        if target_mean >= self.state_max - ENDPOINT_TOLERANCE:
+            if target_mean > self.state_max + ENDPOINT_TOLERANCE:
+                raise ValueError(
+                    f"Target mean {target_mean} is above the grid at "
+                    f"{self.state_max}."
+                )
+
+            return self._point_mass(index=self.num_states - 1), np.inf
+
+        eta = _solve_tilt(
+            log_weights=self._repertoire_log_weights,
+            grid=self.state_grid,
+            target_mean=target_mean,
+        )
+
+        return self.tilt(eta=eta), eta
 
     def set_state_dist_from_mean(
         self,
         mean: float,
     ) -> None:
         """
-        Set the state distribution to a bell curve centered on a mean.
+        Set the state distribution to the repertoire projected onto a mean.
+
+        Every distribution the axis ever holds is a member of the same
+        exponential family, so the only thing that ever changes is the tilt.
 
         Args:
-            mean: Mean of the bell curve, on the internal grid.
+            mean: Mean of the state distribution, on the internal grid.
 
         Returns:
         """
 
-        self.state_dist = _bell_curve(
-            grid=self.state_grid,
-            mean=float(np.clip(mean, self.state_min, self.state_max)),
-            sigma=self.sigma,
+        self.state_dist, _ = self.project(target_mean=mean)
+        self.state = self.next_state()
+
+    def partner_target(
+        self,
+        partner_state: float,
+        direction: float | None = None,
+    ) -> float:
+        """
+        Compute the state the partner's behavior pulls the axis toward.
+
+        The complementary target with the response direction applied. The axis
+        sign says what complementary *means* here, reflection about the midpoint
+        on agency and correspondence on communion; the direction says whether
+        this agent responds that way or the opposite way.
+
+        Args:
+            partner_state: Partner state on the internal grid.
+            direction: Optional response direction, defaulting to the direction
+                of the axis reactivity.
+
+        Returns:
+            Partner-implied target state, which lies on the grid whenever the
+            partner state does, because the grid is symmetric about its
+            midpoint.
+        """
+
+        if direction is None:
+            direction = self.direction
+
+        return self.midpoint + direction * self.complementarity_direction * (
+            partner_state - self.midpoint
         )
 
-        self.state = self.next_state()
+    def update_mean(
+        self,
+        mean: float,
+        target: float,
+    ) -> float:
+        """
+        Advance the expected state by one exchange.
+
+        Written as a displacement from the previous mean rather than as the
+        weighted average of the module docstring. The two are algebraically the
+        same, and this form drifts less when the mean is already close to the
+        target.
+
+        Args:
+            mean: Expected state before the update.
+            target: Partner-implied target from partner_target.
+
+        Returns:
+            Updated expected state, which lies in the convex hull of the
+            previous mean, BD and the target, and so cannot leave the grid.
+        """
+
+        return mean + self.lambda_relax * (
+            (1.0 - self.IR_abs) * (self.BD - mean) + self.IR_abs * (target - mean)
+        )
 
     def update_from_partner_state(
         self,
@@ -401,55 +709,57 @@ class LASSIAxis:
         Returns:
         """
 
-        state_dist_t_minus_1 = _normalize(self.state_dist.astype(float))
-        mean_t_minus_1 = _expectation(
-            grid=self.state_grid,
-            probabilities=state_dist_t_minus_1,
+        if not self.state_min <= partner_state <= self.state_max:
+            raise ValueError(
+                f"Partner state {partner_state} lies outside the grid "
+                f"[{self.state_min}, {self.state_max}]."
+            )
+
+        state_dist_t_minus_1 = self.state_dist
+        mean_t_minus_1 = _expectation(self.state_grid, state_dist_t_minus_1)
+
+        target = self.partner_target(partner_state=partner_state)
+        mean_t = self.update_mean(mean=mean_t_minus_1, target=target)
+
+        state_dist_t, eta = self.project(target_mean=mean_t)
+
+        realised_mean = _expectation(self.state_grid, state_dist_t)
+        variance = float(
+            np.dot(self.state_grid**2, state_dist_t) - realised_mean**2
         )
-
-        delta_BD = self._delta_BD(
-            expected_state=mean_t_minus_1,
-        )
-
-        delta_C = self._delta_C(
-            partner_state=partner_state,
-        )
-
-        delta_IR = self.IR * delta_C
-
-        unclipped_mean_t = mean_t_minus_1 + delta_BD + delta_IR
-        mean_t = float(np.clip(unclipped_mean_t, self.state_min, self.state_max))
-
-        drift = mean_t - mean_t_minus_1
-
-        transition_matrix = _gaussian_transport_kernel(
-            grid=self.state_grid,
-            drift=drift,
-            sigma=self.sigma_eff,
-            boundary_stickiness=self.boundary_stickiness,
-        )
-
-        state_dist_t = state_dist_t_minus_1 @ transition_matrix
 
         self.prior_state_dist = state_dist_t_minus_1
-        self.state_dist = _normalize(state_dist_t)
-        self.transition_matrix = transition_matrix
-        self.drift_components = {
-            "partner_state": float(partner_state),
-            "prior_mean_state_dist": mean_t_minus_1,
-            "BD_pull_comp": delta_BD,
-            "C_comp": delta_C,
-            "IR_comp": delta_IR,
-            "unclipped_mean_state_dist": unclipped_mean_t,
-            "updated_mean_state_dist": mean_t,
-            "drift": drift,
+        self.state_dist = state_dist_t
+        self.step_components = {
+            "s_other": float(partner_state),
+            "IR_abs": self.IR_abs,
+            "direction": self.direction,
+            "m_effective": self.direction * self.complementarity_direction,
+            "partner_target": target,
+            "target_complementary": self.partner_target(
+                partner_state=partner_state,
+                direction=1.0,
+            ),
+            "target_anti": self.partner_target(
+                partner_state=partner_state,
+                direction=-1.0,
+            ),
+            "w_prior": 1.0 - self.lambda_relax,
+            "w_BD_eff": self.lambda_relax * (1.0 - self.IR_abs),
+            "w_IR_eff": self.lambda_relax * self.IR_abs,
+            "mu_prev": mean_t_minus_1,
+            "mu_t": mean_t,
+            "eta": eta,
+            "eta_is_infinite": not bool(np.isfinite(eta)),
+            "mu_realised": realised_mean,
+            "sd_realised": float(np.sqrt(max(variance, 0.0))),
         }
 
     def next_state(
         self,
-    ) -> int:
+    ) -> float:
         """
-        Update and return the current discrete state.
+        Draw the current discrete state from the state distribution.
 
         Args:
 
@@ -458,9 +768,11 @@ class LASSIAxis:
         """
 
         if self.deterministic:
-            return int(np.argmax(self.state_dist))
+            index = int(np.argmax(self.state_dist))
+        else:
+            index = int(np.random.choice(self.num_states, p=self.state_dist))
 
-        return int(np.random.choice(len(self.state_dist), p=self.state_dist))
+        return float(self.state_grid[index])
 
     def step_record(
         self,
@@ -468,58 +780,35 @@ class LASSIAxis:
         """
         Return every quantity of the most recent update step.
 
+        The field names follow the conformance vectors of the handoff, so that
+        the test compares them without a translation table.
+
         Args:
 
         Returns:
-            Distributions, transition matrix and drift components of the step.
+            Distributions, weights and intermediate quantities of the step.
         """
 
         return {
             "dimension": self.dimension,
             "name": self.name,
-            "state_grid": self.state_grid,
-            "prior_state_dist": self.prior_state_dist,
-            "state_dist": self.state_dist,
-            "transition_matrix": self.transition_matrix,
+            "num_states": self.num_states,
+            "grid": self.state_grid,
+            "repertoire": self.repertoire,
+            "repertoire_mean": self.BD,
+            "BD": self.BD,
+            "tau": self.tau,
+            "IR": self.IR,
+            "lambda_relax": self.lambda_relax,
+            "m": self.complementarity_direction,
+            "s_bar": self.midpoint,
+            "state_min": self.state_min,
+            "state_max": self.state_max,
+            "p_prev": self.prior_state_dist,
+            "p_new": self.state_dist,
             "state": self.state,
-            "midpoint": self.midpoint,
-            "sigma_eff": self.sigma_eff,
-            **self.drift_components,
+            **self.step_components,
         }
-
-    def _delta_BD(
-        self,
-        expected_state: float,
-    ) -> float:
-        """
-        Compute the behavioral-default pull.
-
-        Args:
-            expected_state: Expected state at the previous time point.
-
-        Returns:
-            Behavioral-default increment.
-        """
-
-        return self.w_BD * (self.BD - expected_state)
-
-    def _delta_C(
-        self,
-        partner_state: float,
-    ) -> float:
-        """
-        Compute the complementarity increment.
-
-        Args:
-            partner_state: Partner state on the internal grid.
-
-        Returns:
-            Complementarity increment.
-        """
-
-        centered_partner_state = partner_state - self.midpoint
-
-        return self.w_C * self.complementarity_direction * centered_partner_state
 
     def to_itp_state(
         self,
@@ -533,12 +822,12 @@ class LASSIAxis:
             Current state on the ITP 1-based scale.
         """
 
-        return self.state + 1
+        return int(round(float(to_itp_scale(self.state, self.num_states))))
 
     def to_internal_state(
         self,
         itp_state: float,
-    ) -> int:
+    ) -> float:
         """
         Convert an ITP state to the internal grid.
 
@@ -546,7 +835,7 @@ class LASSIAxis:
             itp_state: State on the ITP 1-based scale.
 
         Returns:
-            State on the internal 0-based grid.
+            State on the internal centered grid.
         """
 
         if int(itp_state) != itp_state:
@@ -557,7 +846,26 @@ class LASSIAxis:
                 f"LASSIFormalModel states must be between 1 and {self.num_states}."
             )
 
-        return int(itp_state) - 1
+        return float(to_internal_scale(itp_state, self.num_states))
+
+    def _point_mass(
+        self,
+        index: int,
+    ) -> np.ndarray:
+        """
+        Build the degenerate distribution on one grid state.
+
+        Args:
+            index: Index into the state grid.
+
+        Returns:
+            Indicator vector at that index.
+        """
+
+        probabilities = np.zeros(self.num_states, dtype=float)
+        probabilities[index] = 1.0
+
+        return probabilities
 
 
 class LASSIFormalModel(BaseFormalModel):
@@ -577,6 +885,9 @@ class LASSIFormalModel(BaseFormalModel):
     ) -> None:
         """
         Initialize a LASSI formal model.
+
+        Agency and communion are modelled as separate, independent axes: the
+        model runs once per axis and nothing in it couples them.
 
         Args:
             model_id: Identifier of the formal model.

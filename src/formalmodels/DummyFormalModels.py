@@ -4,6 +4,41 @@ import random
 
 from src.formalmodels.BaseFormalModel import BaseFormalModel
 
+# Manhattan radius of the SASB diamond, from the IBSSS description in
+# schema/interpersonal-behavior-state-space/sasb.json.
+SASB_DIAMOND_RADIUS = 2
+
+
+def project_onto_sasb_diamond(
+    affiliation: float,
+    interdependence: float,
+) -> dict[str, int]:
+    """
+    Round a SASB state onto the integer lattice and into the diamond.
+
+    The SASB state space is discrete and diamond-shaped, so a state must have
+    integer coordinates with a Manhattan distance of at most two from the
+    center. Averaging two valid states does not preserve either property.
+
+    Args:
+        affiliation: Affiliation value.
+        interdependence: Interdependence value.
+
+    Returns:
+        SASB state on the lattice and inside the diamond.
+    """
+
+    values = {
+        "Aff": int(round(affiliation)),
+        "Int": int(round(interdependence)),
+    }
+
+    while sum(abs(value) for value in values.values()) > SASB_DIAMOND_RADIUS:
+        dimension = max(values, key=lambda key: abs(values[key]))
+        values[dimension] -= 1 if values[dimension] > 0 else -1
+
+    return values
+
 
 class DummyIPCFormalModel(BaseFormalModel):
     """
@@ -50,6 +85,11 @@ class DummyIPCFormalModel(BaseFormalModel):
         """
         Update the IPC state using another IPC state.
 
+        The angle of the input is only read when its radius is greater than
+        zero. At the neutral center the circumplex defines no angle, so moving
+        toward the reported one would treat a neutral partner as if it had a
+        direction. Only the radius is integrated in that case.
+
         Args:
             numerical_input: Numerical input containing Theta and R.
             context: Optional string describing the interaction context.
@@ -57,11 +97,12 @@ class DummyIPCFormalModel(BaseFormalModel):
         Returns:
         """
 
-        old_theta = self.state["Theta"]
-        other_theta = numerical_input["Theta"]
-        theta_difference = (other_theta - old_theta + 180) % 360 - 180
+        if numerical_input["R"] > 0:
+            old_theta = self.state["Theta"]
+            theta_difference = (numerical_input["Theta"] - old_theta + 180) % 360 - 180
 
-        self.state["Theta"] = (old_theta + theta_difference / 2) % 360
+            self.state["Theta"] = (old_theta + theta_difference / 2) % 360
+
         self.state["R"] = (self.state["R"] + numerical_input["R"]) / 2
 
     def generate_numerical_output(
@@ -130,6 +171,10 @@ class DummySASBFormalModel(BaseFormalModel):
         """
         Update the SASB state using another SASB state.
 
+        The averaged state is projected back onto the SASB lattice, because the
+        SASB state space is discrete and averaging two valid states can leave
+        both the lattice and the diamond.
+
         Args:
             numerical_input: Numerical input containing Aff and Int.
             context: Optional string describing the interaction context.
@@ -137,8 +182,10 @@ class DummySASBFormalModel(BaseFormalModel):
         Returns:
         """
 
-        self.state["Aff"] = (self.state["Aff"] + numerical_input["Aff"]) / 2
-        self.state["Int"] = (self.state["Int"] + numerical_input["Int"]) / 2
+        self.state = project_onto_sasb_diamond(
+            affiliation=(self.state["Aff"] + numerical_input["Aff"]) / 2,
+            interdependence=(self.state["Int"] + numerical_input["Int"]) / 2,
+        )
 
     def generate_numerical_output(
         self,
