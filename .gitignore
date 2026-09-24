@@ -11,6 +11,6 @@
 
 results/
 
-CLAUDE.md
-
 .pytest_cache/
+
+.itp-api-url

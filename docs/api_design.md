@@ -280,7 +280,7 @@ The status code table of the specification is implemented in full: 400, 401,
 ## CORS
 
 ```python
-allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"]
+allow_origins=[...]   # localhost and 127.0.0.1 on 5173-5182
 allow_credentials=False
 allow_methods=["GET", "POST", "OPTIONS"]
 allow_headers=["Content-Type", "Authorization"]
@@ -291,6 +291,16 @@ gone with the old `/sessions` endpoints. Pass `allowed_origins` to
 `APISpecification` to change the list; if cookie-based auth is ever introduced,
 `allow_credentials` and the origin list must be revisited together, because
 wildcards are then invalid.
+
+The list is a range rather than the single port 5173 because the mock client is
+a separate process on a separate origin — that is what makes the check
+observable at all — and the API has to allow that origin before either process
+starts. It cannot observe which port the client took, so it allows every port
+the client picks from, which is the range in `src/utils/ports.py`. An explicit
+`ITP_UI_PORT` outside the range is added as well, since both processes read the
+same variable. Widening a development origin list to ten loopback ports costs
+nothing: an origin here is trusted exactly as far as a browser tab on the same
+machine is. A deployment replaces the list outright.
 
 ## Persistence
 

@@ -14,6 +14,11 @@ around a human.
 Start the API first, in another terminal::
 
     python -m src.run_model_api
+
+The API does not always bind 8001: a port already in use makes it move on to
+the next free one. This runner looks for it the same way the mock client does,
+by probing the candidate range. ``ITP_API_BASE_URL`` or ``ITP_API_PORT`` names
+it outright.
 """
 
 from __future__ import annotations
@@ -24,8 +29,9 @@ from typing import Any
 from src.API.APIClient import APIClient, APIError
 from src.formalmodels.BaseFormalModel import BaseFormalModel
 from src.formalmodels.DummyFormalModels import DummyIPCFormalModel
+from src.utils.ports import discover_api_base_url
 
-BASE_URL = "http://127.0.0.1:8001"
+BASE_URL = discover_api_base_url()
 CONTEXT = "workplace_colleague_conversation"
 POLL_WAIT_SECONDS = 10.0
 

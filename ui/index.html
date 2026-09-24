@@ -1313,7 +1313,29 @@ element("flow").addEventListener("change", (event) => {
   element("display-name").disabled = watching;
 });
 
-connect();
+// The API and this page are served by two processes on two origins, so this
+// page cannot know which port the API bound. run_mock_ui found out and answers
+// mock-ui-config.json with the result; the field above is the fallback for
+// when the page is opened without that server, and stays editable either way.
+async function fillInApiBaseUrl() {
+  try {
+    const response = await fetch("mock-ui-config.json", { cache: "no-store" });
+
+    if (!response.ok) {
+      return;
+    }
+
+    const config = await response.json();
+
+    if (config.apiBaseUrl) {
+      element("base-url").value = config.apiBaseUrl;
+    }
+  } catch (error) {
+    // Opened as a file, or served by something else. The default stands.
+  }
+}
+
+fillInApiBaseUrl().then(connect);
 </script>
 
 </body>
