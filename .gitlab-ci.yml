@@ -67,9 +67,9 @@ variables:
 # ####################################
 # MANUAL BUILDS
 # ####################################
-# Build Personalization App Dev Container
-build_app_manual:
-  extends: .build_app
+# Build itp-api Container
+build_itp-api_manual:
+  extends: .build_itp-api
   rules:
     - if: >
         $CI_PIPELINE_SOURCE == "web"
