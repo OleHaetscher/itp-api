@@ -33,6 +33,7 @@ COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
 COPY --chown=appuser:appuser src/ ./src/
 COPY --chown=appuser:appuser schema/ ./schema/
+COPY --chown=appuser:appuser configs/ ./configs/
 
 USER appuser
 
