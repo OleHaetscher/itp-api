@@ -97,6 +97,7 @@ itp/
 ├── docs/
 │   ├── ITP_API_Specification.pdf
 │   ├── api_design.md
+│   ├── client_split.md
 │   └── img.png
 │
 ├── itp-api-flow.html
@@ -163,6 +164,7 @@ itp/
 │   │   └── InteractionContext.py
 │   │
 │   ├── utils/
+│   │   ├── ports.py
 │   │   └── utilfuncs.py
 │   │
 │   └── visualization/
@@ -174,7 +176,8 @@ itp/
 ├── tests/
 │   ├── data/
 │   │   └── lassi_test_vectors.json
-│   └── test_lassi_formal_model.py
+│   ├── test_lassi_formal_model.py
+│   └── test_ports.py
 │
 └── conftest.py
 ```
@@ -396,7 +399,8 @@ root):
 python -m src.run_lassi_visualization
 ```
 
-Then open http://127.0.0.1:8050 in a browser. The sliders vary the axis parameters, the axis
+Then open the address it prints, normally http://127.0.0.1:8050 (the next free port in 8050–8059
+if that one is taken; `ITP_VISUALIZATION_PORT` names one exactly). The sliders vary the axis parameters, the axis
 selector switches between agency and communion — which also switches the colour every trace of
 the current state is drawn in — and the four figures show the mean rule, the two
 targets the partner's state implies and which one the sign of `IR` picks, the tilt that carries
@@ -427,6 +431,22 @@ http://127.0.0.1:8001/api/v1/models
 http://127.0.0.1:8001/docs
 ```
 
+8001 is the first choice, not a requirement. If something already holds it —
+a leftover process from an earlier session, or an unrelated service — the API
+takes the next free port in 8001–8010 and prints which one, rather than
+refusing to start and making you evict whatever is there. `ITP_API_PORT` names
+a port instead, and is then obeyed exactly:
+
+```bash
+ITP_API_PORT=9001 python -m src.run_model_api
+```
+
+Clients do not have to be told. While the API runs it writes its base URL to
+`.itp-api-url` at the repository root (untracked), and `run_API_interaction`
+and the mock client read it, check that it answers, and otherwise search
+8001–8010 for a live catalogue. `ITP_API_BASE_URL` overrides the search
+wholesale, for an API on another host.
+
 Then, in another terminal, run (from the repository root):
 
 ```bash
@@ -453,10 +473,19 @@ python -m src.run_model_api   # http://127.0.0.1:8001
 python -m src.run_mock_ui     # http://127.0.0.1:5173
 ```
 
-Then open http://127.0.0.1:5173. The port is not arbitrary: `APISpecification` allows browser
-requests from `localhost:5173` and `127.0.0.1:5173` only, so a page served anywhere else is
-refused by CORS before it reaches a route. Serving the page from the API process itself would
-make it same-origin and hide that check.
+Then open the address `run_mock_ui` prints, normally http://127.0.0.1:5173. The port matters:
+serving the page from the API process would make it same-origin and hide the CORS check, which
+is the opposite of what a mock client is for, so `APISpecification` has to allow the page's
+origin explicitly. It allows `localhost` and `127.0.0.1` on 5173–5182, which is the range
+`run_mock_ui` picks from — so a port already in use costs nothing, and a page served from
+anywhere else is still refused before it reaches a route. `ITP_UI_PORT` names a port outside
+that range, but it then has to be set for the API process too, since that is where the origin
+list is built.
+
+The page does not have to be told which port the API took. `run_mock_ui` finds the API the same
+way `run_API_interaction` does and answers `mock-ui-config.json` with the result, which fills in
+the base URL field before the first request. The field stays editable: discovery is a
+convenience, not a constraint.
 
 Each step is a collapsible card: the one you are on is open, the ones behind you fold up with a
 one-line summary, and any of them can be reopened by clicking its header. The page walks the
@@ -519,7 +548,7 @@ disk. See `docs/api_design.md` under *Persistence*.
 python -m pytest tests
 ```
 
-There is one test suite, and it exists for one reason. `LASSIFormalModel` is a reimplementation
+The suite that matters most exists for one reason. `LASSIFormalModel` is a reimplementation
 of the model in the `lassi_simulations` repository, which also lives a third time in the
 PerTRAIN production repository. The three are separate implementations feeding the same
 published claims, and nothing detects drift between them automatically.
@@ -536,6 +565,11 @@ ever needed.
 When the model changes in `lassi_simulations`, the vectors are regenerated there
 (`python -m handoff.generate_test_vectors`) and the new file replaces this copy. A mismatch is a
 release blocker, not a rounding question.
+
+`tests/test_ports.py` covers the port policy in `src/utils/ports.py`: an explicit port is obeyed
+or refused, never silently replaced; held candidates are skipped; and clients discover the API in
+the documented order, believing the `.itp-api-url` note only when it answers like the catalogue.
+It uses ports the OS hands out, so an API already running on this machine does not affect it.
 
 ## Current Status
 
@@ -554,7 +588,9 @@ Implemented:
 - API client mirroring the JavaScript client
 - value conversion between state spaces (`ac <-> ipc`, `sasb <-> ipc`) via `ConverterRegistry`
 - interactive visualization of the `LASSIFormalModel` update step
-- browser mock client of the API (`ui/index.html`), standing in for the JavaScript application
+- browser mock client of the API (`ui/index.html`), standing in for the JavaScript application.
+  It is due to move into its own repository as the client participants use; see
+  `docs/client_split.md`
 - conformance test of `LASSIFormalModel` against the handoff vectors of `lassi_simulations`
 
 Not yet implemented:
@@ -588,9 +624,11 @@ currently assumes a single process on `localhost`, and four of the *Known gaps* 
   proxy. That proxy must forward the client address: the `clientRequestId` replay scoping and
   the join rate limiter both key on the socket address, and behind a proxy that does not forward
   it, every client collapses into one and the rate limit becomes global.
-- **CORS.** `DEFAULT_ALLOWED_ORIGINS` in `APISpecification` is the development pair on port 5173.
+- **CORS.** `DEFAULT_ALLOWED_ORIGINS` in `APISpecification` is the loopback development range,
+  `localhost` and `127.0.0.1` on 5173–5182, so the mock client can move ports when one is taken.
   The deployed origin of the JavaScript application replaces it, and it has to be decided whether
-  the mock client keeps an origin there at all.
+  the mock client keeps an origin there at all. Ten loopback ports are harmless on a development
+  machine and would not be in a deployment.
 - **Interaction lifetime.** There is no reaper. The `expired` status and the `interactionExpired`
   and `registrationTimeout` end reasons exist and nothing sets them, so a process that is up for
   weeks accumulates interactions until it restarts. It needs an expiry, a cap on concurrent
