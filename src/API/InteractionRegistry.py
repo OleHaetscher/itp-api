@@ -11,10 +11,11 @@ does invitation redemption together with participant registration, so the
 atomicity the ITP API specification requires holds under the thread pool
 FastAPI runs synchronous endpoints in.
 
-Nothing is written to disk and nothing survives the process. Persistence beyond
-the process lifetime is out of scope for this reference implementation; the
-``persistence.enabled`` flag controls whether an interaction keeps its record
-after it ends.
+Nothing here survives the process: a restart drops every interaction and
+every token, and a client holding an old token is told so (see
+``resolve_token``). The ``persistence.enabled`` flag controls whether an
+interaction keeps its record after it ends, and, with a results root, whether
+that record is also written to disk.
 """
 
 from __future__ import annotations
@@ -143,14 +144,25 @@ class InteractionRegistry:
                         client_request_id=client_request_id,
                     )
 
-            model_entry = self._resolve_model(request=request)
-            number_of_turns = self._resolve_number_of_turns(
+            model_entry = self._resolve_model(
+                model_id=request["modelId"],
+                model_version=request.get("modelVersion"),
+            )
+            agent_models = self._resolve_agent_models(
                 request=request,
                 model_entry=model_entry,
             )
+            involved = self._unique_entries(
+                entries=[model_entry, *agent_models.values()],
+            )
+
+            number_of_turns = self._resolve_number_of_turns(
+                request=request,
+                model_entries=involved,
+            )
             persistence_enabled = self._resolve_persistence(
                 request=request,
-                model_entry=model_entry,
+                model_entries=involved,
             )
 
             session_id = str(uuid4())
@@ -158,7 +170,10 @@ class InteractionRegistry:
             agents = self._build_agents(
                 request=request,
                 model_entry=model_entry,
+                agent_models=agent_models,
             )
+
+            self._require_conversion(agents=agents)
 
             interaction = Interaction(
                 session_id=session_id,
@@ -279,35 +294,64 @@ class InteractionRegistry:
     def resolve_token(
         self,
         token: str | None,
+        session_id: str | None = None,
     ) -> TokenScope:
         """
         Resolve an interaction token into what it is allowed to address.
 
+        Interactions and tokens live in memory only, so a server restart makes
+        every interaction and token a client still holds unknown. A request
+        whose path names an interaction this server does not know is therefore
+        answered 404, with a detail saying that a restart drops interactions,
+        whatever token it carries or lacks: that is the one case a client can
+        act on, by starting a new interaction. Only for a known interaction
+        does the token decide: missing is 401 missing-token, unknown is 401
+        invalid-token, and one of another interaction is 403 further on.
+        Answering before the token is checked reveals only whether a session
+        id exists, and session ids are random UUIDs.
+
         Args:
             token: Bearer token sent with the request.
+            session_id: Interaction named in the request path, if any.
 
         Returns:
             Scope of the token.
         """
 
+        with self.lock:
+            if session_id is not None and session_id not in self.interactions:
+                raise ProblemDetail(
+                    problem_type="interaction-not-found",
+                    detail=(
+                        f"There is no interaction {session_id} on this server. "
+                        "Interactions are held in memory, so a server restart "
+                        "drops them with their tokens. Start a new interaction."
+                    ),
+                )
+
         if not token:
             raise ProblemDetail(
                 problem_type="missing-token",
-                detail="The request carries no interaction token.",
+                detail=(
+                    "The request carries no interaction token. Send the "
+                    "interactionToken returned by POST /interactions or POST "
+                    "/interactions/join as 'Authorization: Bearer <token>'. Any "
+                    "token of the interaction may read its status or end it."
+                ),
             )
 
         with self.lock:
             token_hash = hash_secret(token)
-            session_id = self.tokens.get(token_hash)
+            token_session_id = self.tokens.get(token_hash)
 
-            if session_id is None or session_id not in self.interactions:
+            if token_session_id is None or token_session_id not in self.interactions:
                 raise ProblemDetail(
                     problem_type="invalid-token",
                     detail="The interaction token is invalid.",
                 )
 
             return TokenScope(
-                interaction=self.interactions[session_id],
+                interaction=self.interactions[token_session_id],
                 agent_id=self.token_agents.get(token_hash),
                 token_hash=token_hash,
             )
@@ -577,19 +621,20 @@ class InteractionRegistry:
 
     def _resolve_model(
         self,
-        request: dict[str, Any],
+        model_id: str,
+        model_version: str | None,
     ) -> ModelEntry:
         """
-        Resolve the model an interaction is bound to.
+        Resolve one model of the catalogue for a new interaction.
 
         Args:
-            request: Validated creation request.
+            model_id: Identifier of the model.
+            model_version: Exact version the request asks for, if any.
 
         Returns:
             Catalogue entry of the model.
         """
 
-        model_id = request["modelId"]
         model_entry = self.catalogue.get(model_id=model_id)
 
         if model_entry is None:
@@ -607,8 +652,6 @@ class InteractionRegistry:
                 ),
             )
 
-        model_version = request.get("modelVersion")
-
         if model_version is not None and model_version != model_entry.version:
             raise ProblemDetail(
                 problem_type="invalid-configuration",
@@ -623,20 +666,44 @@ class InteractionRegistry:
     def _resolve_number_of_turns(
         self,
         request: dict[str, Any],
-        model_entry: ModelEntry,
+        model_entries: list[ModelEntry],
     ) -> int:
         """
-        Resolve and check the number of turns against the model constraints.
+        Resolve and check the number of turns against every model's constraints.
 
         Args:
             request: Validated creation request.
-            model_entry: Catalogue entry of the model.
+            model_entries: Catalogue entries of every model in the interaction.
 
         Returns:
             Number of interaction turns.
         """
 
         number_of_turns = request["numberOfTurns"]
+
+        for model_entry in model_entries:
+            self._require_turns_allowed(
+                number_of_turns=number_of_turns,
+                model_entry=model_entry,
+            )
+
+        return number_of_turns
+
+    def _require_turns_allowed(
+        self,
+        number_of_turns: int,
+        model_entry: ModelEntry,
+    ) -> None:
+        """
+        Check the number of turns against the constraints of one model.
+
+        Args:
+            number_of_turns: Requested number of turns.
+            model_entry: Catalogue entry of the model.
+
+        Returns:
+        """
+
         constraints = model_entry.constraints
 
         if not constraints.minimum_turns <= number_of_turns <= constraints.maximum_turns:
@@ -656,19 +723,17 @@ class InteractionRegistry:
                 ],
             )
 
-        return number_of_turns
-
     def _resolve_persistence(
         self,
         request: dict[str, Any],
-        model_entry: ModelEntry,
+        model_entries: list[ModelEntry],
     ) -> bool:
         """
         Resolve whether interaction data is kept after the interaction ends.
 
         Args:
             request: Validated creation request.
-            model_entry: Catalogue entry of the model.
+            model_entries: Catalogue entries of every model in the interaction.
 
         Returns:
             Whether persistence is enabled.
@@ -678,18 +743,159 @@ class InteractionRegistry:
             (request.get("persistence") or {}).get("enabled", False)
         )
 
-        if persistence_enabled and not model_entry.constraints.supports_persistence:
-            raise ProblemDetail(
-                problem_type="invalid-configuration",
-                detail=f"Model {model_entry.model_id} does not support persistence.",
+        if not persistence_enabled:
+            return False
+
+        for model_entry in model_entries:
+            if not model_entry.constraints.supports_persistence:
+                raise ProblemDetail(
+                    problem_type="invalid-configuration",
+                    detail=f"Model {model_entry.model_id} does not support persistence.",
+                )
+
+        return True
+
+    def _resolve_agent_models(
+        self,
+        request: dict[str, Any],
+        model_entry: ModelEntry,
+    ) -> dict[str, ModelEntry]:
+        """
+        Resolve the model every formal model agent runs.
+
+        A model agent runs the interaction's model unless it names its own
+        with agents.X.modelId, which lets two different models interact. A
+        human agent runs no model, so naming one for it is an error rather than
+        something to ignore.
+
+        Args:
+            request: Validated creation request.
+            model_entry: Catalogue entry of the interaction's model.
+
+        Returns:
+            Catalogue entry per role, for the model agents only.
+        """
+
+        agent_models: dict[str, ModelEntry] = {}
+
+        for role, specification in request["agents"].items():
+            agent_model_id = specification.get("modelId")
+
+            if specification["type"] != "model":
+                for field_name in ("modelId", "modelVersion"):
+                    if specification.get(field_name) is not None:
+                        raise ProblemDetail(
+                            problem_type="invalid-configuration",
+                            detail=(
+                                f"Agent {role} is human and runs no model, so it "
+                                f"cannot be given a {field_name}."
+                            ),
+                            errors=[
+                                {
+                                    "path": f"/agents/{role}/{field_name}",
+                                    "code": "humanAgent",
+                                    "message": f"Only model agents take a {field_name}.",
+                                }
+                            ],
+                        )
+                continue
+
+            # The catalogue hands out one entry object per model, so an agent
+            # that names the interaction's model gets that very entry back.
+            agent_models[role] = self._resolve_model(
+                model_id=agent_model_id or model_entry.model_id,
+                model_version=specification.get("modelVersion"),
             )
 
-        return persistence_enabled
+        return agent_models
+
+    @staticmethod
+    def _unique_entries(
+        entries: list[ModelEntry],
+    ) -> list[ModelEntry]:
+        """
+        Drop repeated catalogue entries, keeping their order.
+
+        Args:
+            entries: Catalogue entries, possibly repeated.
+
+        Returns:
+            Each entry once.
+        """
+
+        unique: list[ModelEntry] = []
+
+        for entry in entries:
+            if all(entry is not seen for seen in unique):
+                unique.append(entry)
+
+        return unique
+
+    def _require_conversion(
+        self,
+        agents: dict[str, AgentSlot],
+    ) -> None:
+        """
+        Check that every behavior can reach the partner's state space.
+
+        Without this check an interaction between, say, an agency-communion
+        model and a SASB model would be created and then fail on its first
+        action, because no converter connects the two spaces. Converters are
+        looked up directly and not chained.
+
+        Args:
+            agents: Agents of the new interaction, keyed by role.
+
+        Returns:
+        """
+
+        first, second = (agents[role] for role in AGENT_ROLES)
+
+        if first.state_space == second.state_space:
+            return
+
+        # A converter that cannot be asked in advance is trusted, as before
+        # this check existed; ConverterRegistry can be asked.
+        get_converter = getattr(self.converter, "get_converter", None)
+
+        if self.converter is not None and get_converter is None:
+            return
+
+        for source, target in (
+            (first.state_space, second.state_space),
+            (second.state_space, first.state_space),
+        ):
+            if get_converter is None:
+                missing = True
+            else:
+                try:
+                    get_converter(source=source, target=target)
+                    missing = False
+                except ValueError:
+                    missing = True
+
+            if missing:
+                raise ProblemDetail(
+                    problem_type="invalid-configuration",
+                    detail=(
+                        f"The agents work in the state spaces {first.state_space} "
+                        f"and {second.state_space}, and this API has no converter "
+                        f"from {source} to {target}."
+                    ),
+                    errors=[
+                        {
+                            "path": "/agents",
+                            "code": "noConverter",
+                            "message": f"No converter from {source} to {target}.",
+                        }
+                    ],
+                )
 
     def _build_agents(
         self,
         request: dict[str, Any],
         model_entry: ModelEntry,
+        agent_models: dict[str, ModelEntry],
     ) -> dict[str, AgentSlot]:
         """
         Build the agent slots of an interaction.
@@ -699,7 +905,10 @@ class InteractionRegistry:
 
         Args:
             request: Validated creation request.
-            model_entry: Catalogue entry of the model.
+            model_entry: Catalogue entry of the interaction's model, which
+                decides the agent types allowed and a human agent's default
+                state space.
+            agent_models: Catalogue entry of the model each model agent runs.
 
         Returns:
             Agents of the interaction, keyed by role.
@@ -719,12 +928,17 @@ class InteractionRegistry:
         for role in AGENT_ROLES:
             specification = requested[role]
             agent_type = specification["type"]
+            agent_model = agent_models.get(role)
 
-            if agent_type not in model_entry.supported_agent_types:
+            # A model agent is checked against the model it runs, a human agent
+            # against the interaction's model, which is the one it is paired with.
+            checked_entry = agent_model or model_entry
+
+            if agent_type not in checked_entry.supported_agent_types:
                 raise ProblemDetail(
                     problem_type="invalid-configuration",
                     detail=(
-                        f"Model {model_entry.model_id} does not support agents of "
+                        f"Model {checked_entry.model_id} does not support agents of "
                         f"type {agent_type}."
                     ),
                 )
@@ -734,14 +948,15 @@ class InteractionRegistry:
                 role=role,
                 agent_type=agent_type,
                 state_space=specification.get("stateSpace")
-                or model_entry.state_space,
+                or (agent_model or model_entry).state_space,
                 display_name=specification.get("displayName"),
                 configuration=specification.get("configuration"),
+                model_entry=agent_model,
             )
 
-            if agent_type == "model":
+            if agent_model is not None:
                 agent.model = self._instantiate_model(
-                    model_entry=model_entry,
+                    model_entry=agent_model,
                     agent=agent,
                 )
                 agent.analysis_unit = agent.model.analysis_unit

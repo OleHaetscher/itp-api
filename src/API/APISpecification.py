@@ -200,7 +200,10 @@ class APISpecification:
             allow_origins=list(allowed_origins),
             allow_credentials=False,
             allow_methods=["GET", "POST", "OPTIONS"],
-            allow_headers=["Content-Type", "Authorization"],
+            # X-API-Key is what the gateway in front of the deployed API checks.
+            # This process ignores it, but a browser client sending it is
+            # preflighted here whenever the gateway passes CORS through.
+            allow_headers=["Content-Type", "Authorization", "X-API-Key"],
         )
 
         @self.app.middleware("http")
@@ -502,12 +505,14 @@ class APISpecification:
 
     def authenticate(
         self,
+        request: Request,
         credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     ) -> TokenScope:
         """
         Resolve the interaction token of a request into what it may address.
 
         Args:
+            request: Incoming request, whose path names the interaction.
             credentials: Bearer credentials sent with the request.
 
         Returns:
@@ -516,7 +521,10 @@ class APISpecification:
 
         token = credentials.credentials if credentials is not None else None
 
-        return self.registry.resolve_token(token=token)
+        return self.registry.resolve_token(
+            token=token,
+            session_id=request.path_params.get("session_id"),
+        )
 
     def resolve_interaction(
         self,

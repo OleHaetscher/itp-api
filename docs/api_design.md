@@ -220,6 +220,45 @@ exactly as the specification describes.
 | `sourceAgentId` on a perception | Names the agent whose behavior produced the experience. |
 | `itpMessages` in `/results` | The ITP record of the interaction, beside the specification's `turns`. |
 | `resultsFolder` in `/results` | Names the folder the record was written to, relative to the configured results root, so a client can say where the run landed. `null` when nothing was written. |
+| `modelId` and `modelVersion` on a model agent | Lets the two agents run different models. See *Two models in one interaction*. |
+| `model` on every agent | The model the agent runs, as `{id, version, name}`, or `null` for a human. In the status, creation, join and results responses. |
+
+## Two models in one interaction
+
+The specification binds an interaction to one `modelId`. A model agent may now
+name its own with `agents.X.modelId` (and optionally `agents.X.modelVersion`),
+which overrides the top-level model for that agent:
+
+```json
+{
+  "modelId": "lassi",
+  "numberOfTurns": 20,
+  "agents": {
+    "A": {"type": "model"},
+    "B": {"type": "model", "modelId": "dummy-ipc"}
+  }
+}
+```
+
+A request without per-agent models means what it meant before. The top-level
+`modelId` stays required: it is the model a human agent is paired with, decides
+a human agent's default state space, and is what the top-level `model` field of
+every response reports. Which model an agent actually runs is in that agent's
+`model` field, `null` for a human. A client that needs to know who ran what reads
+it there, not from the top level.
+
+Creation checks every model involved: each must exist and be available, the
+number of turns must lie within every model's limits, and persistence must be
+supported by every one. A human agent given a `modelId` is refused, because it
+runs no model.
+
+When the two agents work in different state spaces, every behavior has to be
+converted, and creation refuses the pair unless a converter exists in both
+directions. Converters are looked up directly and not chained, so `lassi`
+(`ac`) with `dummy-ipc` (`ipc`) works, while `lassi` with `dummy-sasb` (`sasb`)
+is a `422` with the error code `noConverter`. Before this check, such a pair was
+created and failed on its first action. The same check now covers a human agent
+that declares a `stateSpace` no converter reaches.
 
 ## Authentication
 
@@ -228,6 +267,20 @@ exactly as the specification describes.
 `secrets.token_urlsafe(32)` and are stored only as SHA-256 hashes, keyed to a
 session id. A token is checked against the `sessionId` in the path, so a token
 for one interaction cannot address another.
+
+A request without a token is `401 missing-token`, and the detail says how to
+send one: `Authorization: Bearer <interactionToken>`, with the token from the
+creation or the join response. That holds for `/end` as well. Ending needs no
+token of its own, since any token of the interaction may end it.
+
+Interactions and tokens live in memory, so a server restart drops them. A
+request naming an interaction the server does not know is `404
+interaction-not-found`, whatever token it carries or lacks, and the detail says that a restart
+drops interactions and that the client should start a new one. A token that is
+unknown while its interaction exists stays `401 invalid-token`. Telling the two
+apart reveals only whether a session id exists, and session ids are random
+UUIDs. Why interactions do not survive a restart, and what it would take, is
+under *Server restarts*.
 
 `GET /models` and `GET /models/{modelId}` need no token. `POST
 /interactions` needs none, because nothing exists yet to be scoped to. `POST
@@ -310,10 +363,13 @@ The status code table of the specification is implemented in full: 400, 401,
 allow_origins=[...]   # localhost and 127.0.0.1 on 5173-5182
 allow_credentials=False
 allow_methods=["GET", "POST", "OPTIONS"]
-allow_headers=["Content-Type", "Authorization"]
+allow_headers=["Content-Type", "Authorization", "X-API-Key"]
 ```
 
-`Authorization` is allowed because the API is now authenticated. `DELETE` is
+`Authorization` is allowed because the API is now authenticated. `X-API-Key`
+is the header the gateway in front of the deployed API checks. This process
+ignores it, but a browser client sending it is preflighted here whenever the
+gateway passes CORS through. `DELETE` is
 gone with the old `/sessions` endpoints. Pass `allowed_origins` to
 `APISpecification` to change the list; if cookie-based auth is ever introduced,
 `allow_credentials` and the origin list must be revisited together, because
@@ -342,16 +398,32 @@ The in-memory record does not survive the process. A record on disk does.
 ### Writing the record
 
 `APISpecification(results_root=...)` names a directory, and every interaction
-with persistence enabled writes itself below `<results_root>/results/` when it
-ends — normally, terminated by a client, or failed. `src/run_model_api.py`
-passes the repository root, so records land in `results/` beside the ones
-`src/run_local_interaction.py` writes. Without `results_root` the process writes
-nothing to disk, which is the default and what the test runners use.
+with persistence enabled records itself below `<results_root>/results/`.
+`src/run_model_api.py` passes the repository root, so records land in
+`results/` beside the ones `src/run_local_interaction.py` writes. Without
+`results_root` the process writes nothing to disk, which is the default and what
+the test runners use. With persistence off nothing is written either: the flag
+means what the specification says, and a client that wants a record asks for
+one.
 
-One folder per interaction, named `<timestamp>_<first eight characters of the
-session id>`. The timestamp alone is what `Communication.save_messages` uses,
-and it collides when two interactions end within the same second, which a server
-with several in flight can do.
+One folder per interaction, named `<creation timestamp>_<first eight characters
+of the session id>`. The timestamp alone is what `Communication.save_messages`
+uses, and it collides when two interactions start within the same second, which
+a server with several in flight can do.
+
+The record is written as the interaction runs, not at its end:
+
+1. At creation, the folder and `interaction.json` with what does not change:
+   the agents, the model and state space of each, the context, the number of
+   turns, and the starting role.
+2. Each ITP message as it is stored, through `Communication.save_message`.
+3. `interaction.json` again when the interaction starts, and when it ends
+   (normally, through `/end`, or by failing), with status, end reason, final
+   turn, and message count.
+
+An interaction ended early through `/end` therefore leaves every message up to
+that point, and so does a process that dies, although `interaction.json` then
+records no end.
 
 ```text
 results/20260914_155820_9aa18034/
@@ -365,15 +437,84 @@ The message files are what `Communication` already writes, so an interaction
 driven through the API leaves the same record as one driven locally, including
 the `_converted` copy whenever the two agents work in different state spaces.
 `interaction.json` holds what only the API knows: which agent was human and
-which was a model, the state space each worked in, the model and its version,
-the end reason, the timestamps, and the bare behavior vector of every turn as it
-came off the wire.
+which was a model, which model each ran, the state space each worked in, the
+end reason, and the timestamps. The behavior vectors are in the message files
+and are not repeated there; `/results` still returns them as `turns`.
 
-Writing happens inside the action that ends the interaction, so a failed write
-is reported on the server log and swallowed rather than raised: a full disk
-should not turn a completed interaction into a `500` after its status has
-already been set. `resultsFolder` in the `/results` response is then `null`,
-which is how a client can tell.
+Every write is reported on the server log and swallowed rather than raised: a
+full disk should not turn a running interaction into a `500`. If the folder
+cannot be created, `resultsFolder` in the `/results` response is `null`, which
+is how a client can tell.
+
+## Server restarts
+
+Everything an interaction needs while it runs lives in the memory of one
+process: the `Interaction` objects with their turn state, perceptions and
+actions, the formal model instances, the token and invitation hashes, and the
+idempotency records. A restart, whether a deployment, a crash, or a host
+reboot, drops all of it. The record on disk survives (see *Persistence*), but
+it is a record, not something the server can resume from. There are two ways to
+handle this.
+
+### Option 1: no continuation after a restart (implemented)
+
+An interaction in flight during a restart is lost, and the client starts a new
+one. The server makes this explicit rather than leaving the client to guess:
+any request naming an interaction it does not know is `404
+interaction-not-found`, and the detail says that a restart drops interactions
+and that the client should start a new interaction. A client therefore needs
+one rule: on that `404` for an interaction it created, create a new one, and
+treat the old one as ended.
+
+What is lost: the turns of the interrupted interaction from the client's point
+of view. With persistence enabled, every ITP message up to the restart is still
+in `results/`, and `interaction.json` then has no end status, end reason or
+`endedAt`, which marks the interaction as interrupted rather than ended.
+
+This costs nothing on the server, and it is acceptable as long as interactions
+are short and restarts are rare and planned. It is not acceptable once a study
+cannot afford to lose a participant's half-finished interaction to a
+deployment.
+
+### Option 2: interactions survive a restart (not implemented)
+
+The registry would write its state to a store as the interactions run and
+reload it on startup, so a client could continue with the token it holds.
+That requires:
+
+- **The formal model's own state.** This is the hard part. A model instance is
+  a Python object whose state is whatever the model keeps between turns: for
+  `LASSIFormalModel`, per axis the current and previous state distribution and
+  the sampled state. Sampling draws from NumPy's global random generator, which
+  is shared by every interaction in the process, so a non-deterministic model
+  cannot be resumed reproducibly without giving each instance its own seeded
+  generator first. `BaseFormalModel` would need a `to_state()` / `from_state()` pair that every
+  model implements exactly, and the conformance vectors would have to cover the
+  round trip, because a model reloaded slightly differently produces different
+  behavior from then on without any error.
+- **The interaction itself.** Status, current turn, active agent, cursor, the
+  perceptions and actions issued so far, the turn records, and the
+  `Communication` messages. All of it is plain data and serializes directly.
+- **The registry.** Token hashes and their agent bindings, invitation hashes
+  with their expiry, and the `clientRequestId` records. Only hashes are stored
+  today, so nothing secret would be written. Invitation expiry runs on
+  `time.monotonic()`, which does not survive a process, and would have to
+  switch to wall-clock time.
+- **When to write.** After every state change, that is every action, inside the
+  interaction lock, and atomically (write to a temporary file, then rename), so
+  a crash mid-write cannot leave a state the server half-reloads.
+- **Code changes between write and reload.** A redeployment that changes a
+  model's code or parameters would resume old interactions under the new model.
+  Each stored interaction would have to carry the model version and be refused,
+  or ended as `serverError`, when it no longer matches.
+- **Participant data at rest.** A participant's behavior already reaches disk
+  when persistence is on. With a store, it also reaches disk when persistence
+  is off, which contradicts what the flag promises. The store would then have to
+  be deleted as soon as such an interaction ends.
+
+Of these, only the formal model state touches the scientific code. The rest is
+ordinary engineering, roughly a store class, a reload path in
+`InteractionRegistry`, and tests that restart an API mid-interaction.
 
 ## Known gaps
 
@@ -398,10 +539,12 @@ These are real and should be decided rather than discovered later.
   proxy or stay on a trusted network.
 - **Analysis-unit conversion.** Still unimplemented, as in the rest of the
   codebase; a message requiring it raises and surfaces as `422`.
-- **One model per interaction.** Both agents of an interaction use the same
-  model and, unless a human agent declares otherwise, the same state space.
-  Two *different* formal models in one interaction is not expressible in the
-  specification's request shape.
+- **Ending a model-to-model interaction early.** The server runs both models
+  inside the creation request, so the interaction has ended before the client
+  could ask. Ending early only applies when a human agent is involved.
+- **Restarts.** Interactions and tokens do not survive the process. The
+  client has to start a new interaction. See *Server restarts* for the
+  alternative and what it would take.
 - **Model configuration.** `agents.X.configuration` is accepted and stored but
   not passed to the model factory, so two agents of one interaction always run
   the same parameters. `LASSIFormalModel` does take per-instance parameters (its

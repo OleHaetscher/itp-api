@@ -165,7 +165,7 @@
 
   label .hint { font-weight: 400; color: var(--muted-fg); }
 
-  input[type="text"], input[type="number"], select {
+  input[type="text"], input[type="password"], input[type="number"], select {
     width: 100%;
     padding: 8px 10px;
     background: var(--card);
@@ -227,15 +227,7 @@
     border: 1px solid var(--border);
     border-radius: 9px;
     padding: 12px 14px;
-    cursor: pointer;
     background: var(--card);
-  }
-
-  .model-card:hover { border-color: var(--input); }
-
-  .model-card.selected {
-    border-color: var(--sci);
-    background: color-mix(in srgb, var(--sci) 6%, transparent);
   }
 
   .model-card .name { font-weight: 600; color: var(--foreground); }
@@ -396,6 +388,8 @@
       <div class="card-body">
         <label>API base URL <span class="hint">— without /api/v1</span></label>
         <input type="text" id="base-url" value="http://127.0.0.1:8001">
+        <label>API key <span class="hint">— only for an API behind the gateway, sent as X-API-Key</span></label>
+        <input type="password" id="api-key" autocomplete="off" spellcheck="false">
         <button class="action" id="connect">Load model catalogue</button>
         <div class="models" id="models"></div>
       </div>
@@ -416,6 +410,22 @@
           <option value="human-human">You and a second participant</option>
           <option value="model-model">Two models, you watch</option>
         </select>
+
+        <div class="row">
+          <div>
+            <label>Agent A</label>
+            <select id="model-a"></select>
+          </div>
+          <div>
+            <label>Agent B</label>
+            <select id="model-b"></select>
+          </div>
+        </div>
+
+        <div id="binding-model-row" class="hidden">
+          <label>Interaction model <span class="hint">— neither of you runs it; it sets the default state space and the turn limits</span></label>
+          <select id="binding-model"></select>
+        </div>
 
         <label>Your state space <span class="hint">— the space you act in</span></label>
         <select id="state-space"></select>
@@ -739,6 +749,12 @@ async function request(method, path, options = {}) {
   if (payload) headers["Content-Type"] = "application/json";
   if (authenticated && state.token) headers["Authorization"] = `Bearer ${state.token}`;
 
+  // The gateway in front of a deployed API checks the key on every request,
+  // the catalogue included. It lives in the field only: nothing stores it, and
+  // the log shows paths and bodies, never headers.
+  const apiKey = element("api-key").value.trim();
+  if (apiKey) headers["X-API-Key"] = apiKey;
+
   let response;
 
   try {
@@ -797,13 +813,11 @@ async function connect() {
   for (const model of state.models) {
     const card = document.createElement("div");
     card.className = "model-card";
-    card.dataset.modelId = model.id;
     card.innerHTML =
       `<div class="name">${model.name}</div>` +
       `<div class="meta">${model.id} · v${model.version} · ${model.status}` +
       ` · agents: ${model.supportedAgentTypes.join(", ")}</div>` +
       `<div class="meta">${model.description}</div>`;
-    card.addEventListener("click", () => selectModel(model.id));
     container.appendChild(card);
   }
 
@@ -817,34 +831,93 @@ async function connect() {
     }
   }
 
-  if (state.models.length > 0) await selectModel(state.models[0].id);
+  setHint("connect", `${state.models.length} model${state.models.length === 1 ? "" : "s"}`);
+
+  fillModelSelect("binding-model");
+  applyFlow();
 
   show("card-setup", true);
   collapseCard("card-connect", { done: true });
   openCard("card-setup", { active: true });
 }
 
-async function selectModel(modelId) {
-  state.modelId = modelId;
+// ------------------------------------------------------------------- set up
 
-  for (const card of document.querySelectorAll(".model-card")) {
-    card.classList.toggle("selected", card.dataset.modelId === modelId);
+function availableModels() {
+  // Only an available model can be used for a new interaction; the catalogue
+  // above still lists every model with its status.
+  return state.models.filter((model) => model.status === "available");
+}
+
+function fillModelSelect(id) {
+  const select = element(id);
+  const previous = select.value;
+
+  select.innerHTML = "";
+  select.disabled = false;
+
+  for (const model of availableModels()) {
+    const option = document.createElement("option");
+    option.value = model.id;
+    option.textContent = `${model.name} (${model.id})`;
+    select.appendChild(option);
   }
 
-  let definition = state.definitions[modelId];
+  if (availableModels().some((model) => model.id === previous)) select.value = previous;
+}
 
-  if (!definition) {
-    const fetched = await request("GET", `/models/${modelId}`, { authenticated: false });
-    if (!fetched.ok) return;
-    definition = fetched.body;
-    state.definitions[modelId] = definition;
-  }
+function fillHumanSlot(id, label) {
+  const select = element(id);
+  select.innerHTML = `<option value="">${label}</option>`;
+  select.disabled = true;
+}
 
-  const modelSpace = stateSpaceOf(definition);
-  state.schemas[modelSpace] = definition.stateSpaceSchema;
+function applyFlow() {
+  // Agent A is you unless two models interact; agent B is a model unless a
+  // second participant joins. A slot taken by a human shows who it is and
+  // cannot be changed.
+  const flow = element("flow").value;
+  const watching = flow === "model-model";
+
+  if (watching) fillModelSelect("model-a");
+  else fillHumanSlot("model-a", "You");
+
+  if (flow === "human-human") fillHumanSlot("model-b", "Second participant");
+  else fillModelSelect("model-b");
+
+  show("binding-model-row", flow === "human-human");
+
+  element("state-space").disabled = watching;
+  element("participant-id").disabled = watching;
+  element("display-name").disabled = watching;
+
+  updateStateSpaces();
+}
+
+function interactionModelId() {
+  // The API binds every interaction to one model: the one a human agent is
+  // paired with, or agent A's when two models interact. Agent B names its own
+  // model only when it differs, so a request for two instances of one model
+  // looks exactly as it did before models per agent existed.
+  const flow = element("flow").value;
+  if (flow === "model-model") return element("model-a").value;
+  if (flow === "human-model") return element("model-b").value;
+  return element("binding-model").value;
+}
+
+function updateStateSpaces() {
+  const modelId = interactionModelId();
+  const definition = state.definitions[modelId];
 
   const select = element("state-space");
   select.innerHTML = "";
+
+  if (!definition) {
+    setHint("setup", "no available model");
+    return;
+  }
+
+  const modelSpace = stateSpaceOf(definition);
 
   const same = document.createElement("option");
   same.value = modelSpace;
@@ -855,14 +928,20 @@ async function selectModel(modelId) {
     if (space === modelSpace) continue;
     const option = document.createElement("option");
     option.value = space;
-    option.textContent = `${space} — converted for you`;
+    // The page cannot know which converters the API has. A space without one
+    // is offered anyway, so the server's 422 noConverter shows in the log
+    // rather than being pre-empted here.
+    option.textContent = `${space} — converted for you, if the API has a converter`;
     select.appendChild(option);
   }
 
   renderSchema(modelSpace);
 
-  setHint("connect", `${state.models.length} models · ${definition.name}`);
-  setHint("setup", `${modelId} · ${modelSpace}`);
+  const flow = element("flow").value;
+  setHint("setup",
+    flow === "model-model"
+      ? `${element("model-a").value} and ${element("model-b").value}`
+      : `${modelId} · ${modelSpace}`);
 }
 
 function renderSchema(space) {
@@ -883,11 +962,17 @@ function agentsFor(flow) {
   if (flow === "human-human") {
     return { A: you, B: { type: "human", displayName: "Second participant" } };
   }
-  return { A: { type: "model" }, B: { type: "model" } };
+
+  const partner = { type: "model" };
+  const partnerModel = element("model-b").value;
+  if (partnerModel !== element("model-a").value) partner.modelId = partnerModel;
+
+  return { A: { type: "model" }, B: partner };
 }
 
 async function createInteraction() {
   const flow = element("flow").value;
+  state.modelId = interactionModelId();
 
   // The interaction context is deliberately not sent. It reaches the ITP
   // messages but modulates nothing in any model yet, so the API's default
@@ -1012,7 +1097,7 @@ function renderStatus(interaction) {
   element("interaction-facts").innerHTML =
     `<dt>session</dt><dd class="mono">${interaction.sessionId}</dd>` +
     `<dt>status</dt><dd>${interaction.status}</dd>` +
-    `<dt>model</dt><dd>${interaction.model?.id ?? state.modelId}</dd>` +
+    agentModels(interaction) +
     `<dt>turn</dt><dd>${interaction.currentTurn ?? "—"} of ${interaction.numberOfTurns}</dd>` +
     (interaction.context ? `<dt>context</dt><dd>${interaction.context}</dd>` : "") +
     `<dt>you</dt><dd>${you}</dd>`;
@@ -1020,6 +1105,21 @@ function renderStatus(interaction) {
   setHint("interaction",
     `${interaction.status} · turn ${interaction.currentTurn ?? "—"} of ` +
     `${interaction.numberOfTurns}`);
+}
+
+function agentModels(interaction) {
+  // Each agent reports the model it runs, null for a human. A response that
+  // lists no agents, such as the join response, falls back to the
+  // interaction's model.
+  if (!interaction.agents) {
+    return `<dt>model</dt><dd>${interaction.model?.id ?? state.modelId}</dd>`;
+  }
+
+  return Object.entries(interaction.agents)
+    .map(([role, agent]) =>
+      `<dt>agent ${role}</dt><dd>${agent.model ? agent.model.id : "human"}` +
+      `${agent.stateSpace ? ` · ${agent.stateSpace}` : ""}</dd>`)
+    .join("");
 }
 
 async function refreshStatus() {
@@ -1306,12 +1406,10 @@ element("clear-log").addEventListener("click", () => {
 });
 element("state-space").addEventListener("change", (event) => renderSchema(event.target.value));
 
-element("flow").addEventListener("change", (event) => {
-  const watching = event.target.value === "model-model";
-  element("state-space").disabled = watching;
-  element("participant-id").disabled = watching;
-  element("display-name").disabled = watching;
-});
+element("flow").addEventListener("change", applyFlow);
+element("model-a").addEventListener("change", updateStateSpaces);
+element("model-b").addEventListener("change", updateStateSpaces);
+element("binding-model").addEventListener("change", updateStateSpaces);
 
 // The API and this page are served by two processes on two origins, so this
 // page cannot know which port the API bound. run_mock_ui found out and answers
