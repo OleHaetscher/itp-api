@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+Academic project. Before writing or revising any prose in this repository (manuscript text, comments, documentation, commit and PR messages), load the house-style and academic-writing skills. Target journal: not settled yet.
+
 ## What this is
 
 Reference implementation of the **Interpersonal Transaction Protocol (ITP)** — a standardized numerical message format letting formal models of interpersonal interaction communicate. Intentionally minimal and transparent; not production-ready. See `README.md` for the full design writeup.
