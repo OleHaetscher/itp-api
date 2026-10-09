@@ -1,0 +1,76 @@
+stages:
+  - build
+
+variables:
+  # Buildah Settings
+  STORAGE_DRIVER: overlay
+  BUILDAH_FORMAT: docker
+
+# ####################################
+# BUILD BASE
+# ####################################
+.build_base:
+  stage: build
+  image: quay.io/buildah/stable:latest
+  before_script:
+    # Print Status:
+    - 'echo "Project: $REGISTRY_PROJECT"'
+    # Harbor Login
+    - buildah login -u "$REGISTRY_ROBOT_USER" -p "$REGISTRY_ROBOT_PASSWORD" $REGISTRY_HOST
+
+  script:
+    - |
+      IMAGE_TAG=${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}
+
+      MANIFEST_NAME="multiplatform"
+      IMAGE_URL="$REGISTRY_HOST/$REGISTRY_PROJECT/$IMAGE_NAME"
+      CACHE_URL="$REGISTRY_HOST/$REGISTRY_PROJECT/$CACHE_NAME"
+
+      echo "Containerfile: $DOCKERFILE_PATH"
+      echo "Build: $IMAGE_URL:$IMAGE_TAG"
+      echo "Cache: $CACHE_URL"
+
+      buildah manifest create "$MANIFEST_NAME"
+
+      buildah bud \
+        --layers \
+        --cache-to $CACHE_URL-amd64 \
+        --cache-from $CACHE_URL-amd64 \
+        --manifest "$MANIFEST_NAME" \
+        --arch amd64 \
+        --file "$DOCKERFILE_PATH" \
+        .
+
+      buildah bud \
+        --layers \
+        --cache-to $CACHE_URL-arm64 \
+        --cache-from $CACHE_URL-arm64 \
+        --manifest "$MANIFEST_NAME" \
+        --arch arm64 \
+        --variant v8 \
+        --file "$DOCKERFILE_PATH" \
+        .
+
+      buildah manifest push --all "$MANIFEST_NAME" "docker://$IMAGE_URL:$IMAGE_TAG"
+      buildah manifest push --all "$MANIFEST_NAME" "docker://$IMAGE_URL:latest"      
+
+# ####################################
+# BUILD CONFIGS
+# ####################################
+.build_itp-api:
+  extends: .build_base
+  variables:
+    DOCKERFILE_PATH: "./Dockerfile"
+    IMAGE_NAME: "itp-api"
+    CACHE_NAME: "cache-itp-api"
+
+# ####################################
+# MANUAL BUILDS
+# ####################################
+# Build itp-api Container
+build_itp-api_manual:
+  extends: .build_itp-api
+  rules:
+    - if: >
+        $CI_PIPELINE_SOURCE == "web"
+      when: manual

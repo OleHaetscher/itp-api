@@ -145,6 +145,8 @@ class APISpecification:
                 "application run interactions between human participants and "
                 "formal models of interpersonal behavior."
             ),
+            docs_url="/docs",
+            openapi_url="/docs/openapi.json",
         )
 
         self._register_middleware(allowed_origins=allowed_origins)
