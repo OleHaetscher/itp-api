@@ -186,7 +186,7 @@ def run_api() -> None:
     Returns:
     """
 
-    host = "127.0.0.1"
+    host = "0.0.0.0"
     port = resolve_port(API_PORT_CANDIDATES, API_PORT_VARIABLE, host=host)
 
     if port != API_PORT_CANDIDATES[0]:
