@@ -387,7 +387,12 @@ class InteractionRegistry:
         client_request_id: str,
     ) -> dict[str, Any]:
         """
-        Replay a creation response for a repeated clientRequestId.
+        Answer a repeated clientRequestId with the interaction as it is now.
+
+        A client that lost its state, for example through a restart, sends its
+        creation request again and gets back the same session and token with
+        the current turn and status, not the response from when the
+        interaction was created.
 
         The stored response carries an interaction token, so it may only be
         handed back to a repeat of the same request from the same source.
@@ -402,7 +407,7 @@ class InteractionRegistry:
             client_request_id: Identifier the client sent.
 
         Returns:
-            Original creation response.
+            Creation response with the interaction's current state.
         """
 
         matches = (
@@ -420,7 +425,24 @@ class InteractionRegistry:
                 ),
             )
 
-        return stored["response"]
+        response = dict(stored["response"])
+        session_id = response["sessionId"]
+        interaction = self.interactions.get(session_id)
+
+        if interaction is None:
+            return response
+
+        response.update(interaction.describe())
+
+        invitation = self.invitations_by_session.get(session_id)
+
+        if "invitation" in response and invitation is not None:
+            response["invitation"] = {
+                "code": response["invitation"]["code"],
+                **invitation.describe(),
+            }
+
+        return response
 
     def get_interaction(
         self,

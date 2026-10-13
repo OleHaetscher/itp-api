@@ -660,16 +660,20 @@ class Interaction:
         self,
         agent_id: str,
         action_id: str,
-        turn: int,
+        turn: int | None,
         behavior: dict[str, Any],
     ) -> dict[str, Any]:
         """
         Accept the behavior of one agent for one turn.
 
+        The response carries the agent's cursor from before the action, so a
+        client that polls with ``after`` set to it gets the perception this
+        action leads to, without keeping a cursor of its own between turns.
+
         Args:
             agent_id: Identifier of the acting agent.
             action_id: Client-generated idempotency identifier.
-            turn: Turn the action belongs to.
+            turn: Turn the action belongs to, or None for the current turn.
             behavior: Behavior vector in the agent's state space.
 
         Returns:
@@ -695,6 +699,13 @@ class Interaction:
 
             if replayed is not None:
                 return replayed
+
+            # The hash above keeps the turn as sent, so a retry without a turn
+            # still matches its original once the current turn has moved on.
+            if turn is None:
+                turn = self.current_turn
+
+            cursor = self._last_cursor(agent_id=agent_id)
 
             self._require_agent_may_act(
                 agent=agent,
@@ -734,6 +745,7 @@ class Interaction:
                 "agentId": agent_id,
                 "actionId": action_id,
                 "turn": turn,
+                "cursor": str(cursor),
                 "sessionStatus": self.status,
                 "acceptedAt": action.accepted_at,
             }

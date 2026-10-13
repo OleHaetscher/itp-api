@@ -356,6 +356,24 @@ Note: geometric/geometry constraints between state spaces are **not enforced yet
 are numeric approximations. Converters live outside `Communication`; the runner applies them
 before delivering a message to a model with a different state space.
 
+A client joins in the state space its own scale speaks, and the API converts to and from the
+model's space. The PerTRAIN backend (`ITPGenerator`) registers its human agent in `ac`, because
+its agency and communion axes have seven states, which is the `ac` grid (1 to 7, set by
+`AC_NUM_STATES`). Which models a client can talk to therefore depends on the converters: an `ac`
+client reaches `lassi` directly and `dummy-ipc` through `ac <-> ipc`, but not `dummy-sasb`,
+because converters are not chained.
+
+A client with a different number of states, say a PerTRAIN model with five states per axis,
+needs a new state space in this repository, not a change to `ac`. `ac` is tied to LASSI's seven
+states, and changing its range silently rescales every converted message. The new space needs:
+
+1. an IBSSS description with the new range in `schema/interpersonal-behavior-state-space/`;
+2. an entry in `STATE_SPACE_SOURCES` in `src/API/StateSpaceSchema.py`, under its own
+   identifier (e.g. `ac5`);
+3. converters to every space it should reach, registered in `make_default_converter_registry`.
+   To talk to `lassi`, that includes a converter to `ac` itself;
+4. a redeploy of the API.
+
 ### `configs`
 
 `interaction_contexts.yaml` holds the interaction contexts, `formal_model_parameters.yaml` holds

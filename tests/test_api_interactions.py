@@ -3,8 +3,10 @@ Tests of the API behaviors added for the PerTRAIN client.
 
 Two different formal models in one interaction, the model each agent runs,
 ending an interaction early with its record kept, the record opened at
-creation, and the answer a client gets after a server restart. Every test runs
-in-process through FastAPI's test client, so no port is involved.
+creation, the answer a client gets after a server restart, actions without a
+turn, the cursor an action returns, and recovering a session by repeating its
+creation request. Every test runs in-process through FastAPI's test client, so
+no port is involved.
 """
 
 from __future__ import annotations
@@ -309,3 +311,123 @@ def test_api_key_header_passes_preflight(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert "X-API-Key" in response.headers["access-control-allow-headers"]
+
+
+def start_human_against_lassi(client: TestClient, **request) -> tuple[dict, str, str, dict[str, str]]:
+    """
+    Create a running interaction of one human agent against LASSI, the human opening.
+
+    Args:
+        client: Test client of the API.
+        **request: Additional creation request fields.
+
+    Returns:
+        Creation response, session id, the human agent's id, and request headers.
+    """
+
+    body = create(
+        client,
+        modelId="lassi",
+        numberOfTurns=10,
+        agents={"A": {"type": "human", "stateSpace": "ac"}, "B": {"type": "model"}},
+        **request,
+    )
+
+    session = body["sessionId"]
+    agent = body["agents"]["A"]["agentId"]
+    headers = bearer(body)
+
+    client.post(f"{PREFIX}/interactions/{session}/agents/{agent}/register", json={}, headers=headers)
+
+    return body, session, agent, headers
+
+
+def test_action_without_turn_takes_the_current_turn(client: TestClient) -> None:
+    _, session, agent, headers = start_human_against_lassi(client)
+    actions = f"{PREFIX}/interactions/{session}/agents/{agent}/actions"
+
+    first = client.post(
+        actions,
+        json={"actionId": "action-1", "behavior": {"A": 4, "C": 4}},
+        headers=headers,
+    )
+    assert first.status_code == 202, first.json()
+    assert first.json()["turn"] == 1
+
+    # Polling after the cursor the action returned gives the model's answer,
+    # without the client having kept a cursor of its own.
+    perception = client.get(
+        f"{PREFIX}/interactions/{session}/agents/{agent}/perception",
+        params={"after": first.json()["cursor"]},
+        headers=headers,
+    ).json()
+    assert perception["state"] == "perceivable"
+    assert set(perception["experience"]) == {"A", "C"}
+    assert perception["turn"] == 3
+
+    second = client.post(
+        actions,
+        json={"actionId": "action-2", "behavior": {"A": 5, "C": 4}},
+        headers=headers,
+    )
+    assert second.json()["turn"] == 3
+
+    # A retry of the first action after the turn has moved on is still the
+    # same action, not a new one for the current turn.
+    retry = client.post(
+        actions,
+        json={"actionId": "action-1", "behavior": {"A": 4, "C": 4}},
+        headers=headers,
+    )
+    assert retry.status_code == 202
+    assert retry.json() == first.json()
+
+
+def test_stale_turn_is_still_refused(client: TestClient) -> None:
+    _, session, agent, headers = start_human_against_lassi(client)
+    actions = f"{PREFIX}/interactions/{session}/agents/{agent}/actions"
+
+    client.post(actions, json={"actionId": "action-1", "behavior": {"A": 4, "C": 4}}, headers=headers)
+    stale = client.post(
+        actions,
+        json={"actionId": "action-2", "turn": 1, "behavior": {"A": 4, "C": 4}},
+        headers=headers,
+    )
+
+    assert stale.status_code == 409
+    assert "not the current turn" in stale.json()["detail"]
+
+
+def test_repeated_creation_returns_the_current_state(client: TestClient) -> None:
+    request = {"clientRequestId": "dialog-instance-1"}
+    body, session, agent, headers = start_human_against_lassi(client, **request)
+
+    client.post(
+        f"{PREFIX}/interactions/{session}/agents/{agent}/actions",
+        json={"actionId": "action-1", "behavior": {"A": 4, "C": 4}},
+        headers=headers,
+    )
+
+    # The client lost its state and sends the creation request again.
+    again = create(
+        client,
+        modelId="lassi",
+        numberOfTurns=10,
+        agents={"A": {"type": "human", "stateSpace": "ac"}, "B": {"type": "model"}},
+        **request,
+    )
+
+    assert again["sessionId"] == session
+    assert again["interactionToken"] == body["interactionToken"]
+    assert again["status"] == "running"
+    assert again["currentTurn"] == 3
+    assert again["agents"]["A"]["registrationStatus"] == "registered"
+
+    # The recovered session continues where it was.
+    resumed = client.post(
+        f"{PREFIX}/interactions/{session}/agents/{agent}/actions",
+        json={"actionId": "action-2", "behavior": {"A": 4, "C": 4}},
+        headers=bearer(again),
+    )
+    assert resumed.status_code == 202, resumed.json()
+    assert resumed.json()["turn"] == 3

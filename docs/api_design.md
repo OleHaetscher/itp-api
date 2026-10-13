@@ -169,9 +169,13 @@ partner's behavior from its own agent's perceptions. It never polls the
 partner's agent, which its token may not address (see *Tokens are bound to an
 agent*).
 
-Its `turn` is the turn in which the perceiving agent is expected to act, so a
-client reads `turn` from a perception and submits it back unchanged with its
-action.
+Its `turn` is the turn in which the perceiving agent is expected to act. A
+client may submit it back unchanged with its action, or leave `turn` out, in
+which case the server takes the current turn. Either way an action from an
+agent whose turn it is not is `409`. The explicit turn only matters to a client
+that re-sends a behavior after a failure and wants it refused if the
+interaction has moved on; a retry under the same `actionId` is recognised
+either way, because the idempotency check uses the turn as sent.
 
 Polling never consumes a perception. The same request repeated returns the same
 perception until the client advances `after` past its `cursor`. Cursors are
@@ -189,6 +193,13 @@ submits next. `cursor` is the perception's position in the interaction's
 stream, which also counts the other agent's perceptions. They coincide when the
 client's agent opens and differ otherwise (cursor 1 with turn 2). A client takes
 both from the last perception it received and computes neither.
+
+The action response carries a `cursor` as well: the acting agent's cursor from
+before the action. Polling with `after` set to it returns the perception the
+action leads to, which for a model partner is already there when the action
+response arrives, because the server runs a model's turn inside the action
+request. A client that acts and then reads the answer therefore keeps no cursor
+between turns.
 
 `wait` enables long polling. The request is held open until a perception
 appears or the deadline passes, capped at 30 seconds by the server. Every step
@@ -220,6 +231,9 @@ exactly as the specification describes.
 | `sourceAgentId` on a perception | Names the agent whose behavior produced the experience. |
 | `itpMessages` in `/results` | The ITP record of the interaction, beside the specification's `turns`. |
 | `resultsFolder` in `/results` | Names the folder the record was written to, relative to the configured results root, so a client can say where the run landed. `null` when nothing was written. |
+| `turn` optional on an action | Without it the server takes the current turn. A client that only ever acts when told to keeps no turn of its own. |
+| `cursor` in the action response | The cursor to poll after for the perception the action leads to, so a client keeps no cursor between turns. |
+| A repeated `clientRequestId` returns the current state | Lets a client that lost its state recover the session and token and continue, instead of getting the creation response with its stale turn. |
 | `modelId` and `modelVersion` on a model agent | Lets the two agents run different models. See *Two models in one interaction*. |
 | `model` on every agent | The model the agent runs, as `{id, version, name}`, or `null` for a human. In the status, creation, join and results responses. |
 
@@ -313,6 +327,17 @@ a client-chosen string — the specification's own example is the fixed value
 repeats the identifier would therefore hand out another client's token. A
 replay must match both the exact request payload and the source address;
 anything else is `409` rather than a second interaction or a leaked token.
+
+A matching repeat returns the interaction as it is now: the same session and
+token, with the current turn, status and registrations, not the response from
+when it was created. This is how a client recovers after losing its own state,
+for example through a restart: it sends the same creation request again and
+continues. It only works if `clientRequestId` is stable per interaction and per
+creating client. The PerTRAIN backend should use the dialog instance id, which
+is reused after a restart and differs between the two agents of an
+agent-agent dialog. After an ITP restart the identifier is unknown again, so
+the same request creates a new interaction, and a request for the old session
+gets the `404` described in *Server restarts*.
 
 The source address comes from the socket, so a deployment behind a proxy must
 forward it or this scoping collapses to the proxy address. The same applies to
