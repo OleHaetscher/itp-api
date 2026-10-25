@@ -607,8 +607,11 @@ interaction, a pair without a converter refused, ending early with the record ke
 written at creation, and the `404` a client gets after a restart.
 
 `tests/test_ports.py` covers the port policy in `src/utils/ports.py`: an explicit port is obeyed
-or refused, never silently replaced; held candidates are skipped; and clients discover the API in
-the documented order, believing the `.itp-api-url` note only when it answers like the catalogue.
+or refused, never silently replaced; held candidates are skipped, also when the holder listens on
+another address than the one asked about (`0.0.0.0` against `127.0.0.1`, or `::1`), which a bind
+test alone misses on macOS; clients discover the API in the documented order, believing the
+`.itp-api-url` note only when it answers like the catalogue, and find an API bound to all
+interfaces; and the API announces itself under `127.0.0.1`, never `0.0.0.0`, which browsers have started to block.
 It uses ports the OS hands out, so an API already running on this machine does not affect it.
 
 ## Current Status

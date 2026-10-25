@@ -47,6 +47,14 @@ import urllib.request
 
 DEFAULT_HOST = "127.0.0.1"
 
+# Both loopback addresses, because a local service may listen on either: a
+# development server bound to "localhost" often holds ::1 only.
+LOOPBACK_HOSTS: tuple[str, ...] = ("127.0.0.1", "::1")
+
+# Bind addresses meaning "every interface". A client cannot connect to one of
+# them; it reaches a server bound there through the loopback address.
+WILDCARD_HOSTS: tuple[str, ...] = ("0.0.0.0", "::", "")
+
 # Where a running API leaves its base URL for clients in other processes. Kept
 # at the repository root and out of version control: it describes one machine
 # at one moment, and is meaningless to anybody else.
@@ -72,16 +80,57 @@ API_BASE_URL_VARIABLE = "ITP_API_BASE_URL"
 # generous rather than tight.
 PROBE_TIMEOUT_SECONDS = 1.0
 
+# Seconds a connection attempt to a local port may take. A port nobody listens
+# on refuses at once; the timeout only matters for a listener that hangs.
+CONNECT_TIMEOUT_SECONDS = 0.5
+
+
+def is_port_listening(
+    port: int,
+    host: str = DEFAULT_HOST,
+    timeout: float = CONNECT_TIMEOUT_SECONDS,
+) -> bool:
+    """
+    Report whether something accepts connections on a port.
+
+    Args:
+        port: Port to test.
+        host: Address to connect to. Must be one a client can reach, not a
+            wildcard bind address.
+        timeout: Seconds the connection attempt may take.
+
+    Returns:
+        True when a connection is accepted, False otherwise, including on a
+        machine without the address family of the host.
+    """
+
+    family = socket.AF_INET6 if ":" in host else socket.AF_INET
+
+    try:
+        with socket.socket(family, socket.SOCK_STREAM) as probe:
+            probe.settimeout(timeout)
+
+            return probe.connect_ex((host, port)) == 0
+    except OSError:
+        return False
+
 
 def is_port_free(
     port: int,
     host: str = DEFAULT_HOST,
 ) -> bool:
     """
-    Report whether a port can be bound on a host.
+    Report whether a server can take a port on a host without sharing it.
 
-    The probe socket sets ``SO_REUSEADDR`` because both servers do, and a port
-    left in ``TIME_WAIT`` by a previous run is free for them.
+    Binding alone does not answer this. The probe socket sets ``SO_REUSEADDR``
+    because both servers do, so that a port left in ``TIME_WAIT`` by a
+    previous run counts as free. On macOS the same option also lets a wildcard
+    bind and a loopback bind of one port coexist: with the API listening on
+    ``0.0.0.0:8001``, a bind to ``127.0.0.1:8001`` succeeds, and the reverse.
+    A port that binds is therefore also tried with a connection, on the
+    loopback addresses for a loopback or wildcard host, and is free only if
+    nothing answers. A port in ``TIME_WAIT`` accepts no connection, so it
+    stays free.
 
     Args:
         port: Port to test.
@@ -99,7 +148,15 @@ def is_port_free(
         except OSError:
             return False
 
-    return True
+    if host in WILDCARD_HOSTS or host in LOOPBACK_HOSTS or host == "localhost":
+        reachable_hosts = LOOPBACK_HOSTS
+    else:
+        reachable_hosts = (host,)
+
+    return not any(
+        is_port_listening(port, host=reachable_host)
+        for reachable_host in reachable_hosts
+    )
 
 
 def resolve_port(
@@ -171,6 +228,34 @@ def make_origins(
     return tuple(
         f"http://{host}:{port}" for port in ports for host in ("localhost", "127.0.0.1")
     )
+
+
+def make_client_base_url(
+    host: str,
+    port: int,
+) -> str:
+    """
+    Build the base URL a client on this machine reaches a server under.
+
+    A server bound to a wildcard address is reached through the loopback
+    address. ``http://0.0.0.0:<port>`` works from Python, but browsers have
+    started to block requests to it, so it must never reach the mock client's
+    base URL field.
+
+    Args:
+        host: Host the server is bound on.
+        port: Port the server is bound on.
+
+    Returns:
+        Base URL, without the version prefix.
+    """
+
+    client_host = DEFAULT_HOST if host in WILDCARD_HOSTS else host
+
+    if ":" in client_host:
+        client_host = f"[{client_host}]"
+
+    return f"http://{client_host}:{port}"
 
 
 def announce_api_base_url(
@@ -280,9 +365,11 @@ def discover_api_base_url(
     An explicit ``ITP_API_BASE_URL`` or ``ITP_API_PORT`` is taken at its word
     and not probed, so a client can be pointed at an API that is not up yet.
     Otherwise the note the most recently started API left is tried, and then
-    the candidate range is searched. Only ports something already holds are
+    the candidate range is searched. Only ports that accept a connection are
     probed over HTTP, which keeps the search close to instant when nothing is
-    running.
+    running. A bind test cannot answer this: on macOS a bind to ``127.0.0.1``
+    succeeds while the API listens on ``0.0.0.0``, so the API's port would
+    look unused and never be probed.
 
     Args:
         host: Host the API is expected on.
@@ -311,7 +398,7 @@ def discover_api_base_url(
         return announced
 
     for port in candidates:
-        if is_port_free(port, host=host):
+        if not is_port_listening(port, host=host):
             continue
 
         candidate_url = f"http://{host}:{port}"

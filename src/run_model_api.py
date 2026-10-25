@@ -31,6 +31,7 @@ from src.utils.ports import (
     API_PORT_CANDIDATES,
     API_PORT_VARIABLE,
     announce_api_base_url,
+    make_client_base_url,
     resolve_port,
     withdraw_api_base_url,
 )
@@ -195,9 +196,12 @@ def run_api() -> None:
             f"\n  The mock client and run_API_interaction find this automatically."
         )
 
-    base_url = f"http://{host}:{port}"
+    # The server listens on every interface, but 0.0.0.0 is not an address to
+    # connect to (browsers have started to block it), so the printed URL and
+    # the note name the loopback address.
+    base_url = make_client_base_url(host, port)
 
-    print(f"\n  ITP API  ->  {base_url}/api/v1\n")
+    print(f"\n  ITP API  ->  {base_url}/api/v1  (listening on all interfaces)\n")
 
     app = make_api().app
 
