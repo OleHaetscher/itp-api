@@ -123,6 +123,9 @@ itp/
 ├── ui/
 │   └── index.html
 │
+├── examples/
+│   └── itp-api-basic-web-client/   PHP web client of the deployed API, own README
+│
 ├── src/
 │   ├── ITPSpecification.py
 │   ├── run_API_interaction.py
@@ -176,6 +179,7 @@ itp/
 ├── tests/
 │   ├── data/
 │   │   └── lassi_test_vectors.json
+│   ├── test_api_interactions.py
 │   ├── test_lassi_formal_model.py
 │   └── test_ports.py
 │
@@ -578,6 +582,30 @@ This is a property of the API process, not of the page: `src/run_model_api.py` p
 repository root as `results_root`, and an `APISpecification` built without one writes nothing to
 disk. See `docs/api_design.md` under *Persistence*.
 
+## Example Web Client
+
+`examples/itp-api-basic-web-client/` is a minimal web application by Stefan for one fixed
+paradigm: the LASSI model as agent A against a human in the interpersonal circumplex (`ipc`) as
+agent B, ten turns, the model first, persistence off. The human places a point in a circumplex,
+and the model's behavior arrives converted to `ipc` by the server. It is plain HTML and
+JavaScript with a small PHP adapter (`public/api.php`), and it shows how a client keeps the API
+key and the interaction token on its own server. The browser talks only to `api.php`, which adds
+`X-API-Key` and the bearer token and forwards to the API.
+
+It runs against the deployed API only, because `api.php` accepts `https://` base URLs only. The
+key goes in `examples/itp-api-basic-web-client/.env`, copied from `.env.example`; that file is
+ignored by git and sits outside the document root `public/`. Locally, with PHP 8.2 or newer:
+
+```bash
+php -S 127.0.0.1:8080 -t examples/itp-api-basic-web-client/public
+```
+
+Then open `http://127.0.0.1:8080`. Its own README has the details.
+
+The mock client in `ui/` and this example serve different purposes. The mock client exposes
+every endpoint and logs each request, to inspect the protocol. The example is what a participant
+would see, for one paradigm, with nothing of the protocol visible.
+
 ## Tests
 
 ```bash
@@ -636,6 +664,8 @@ Implemented:
 - browser mock client of the API (`ui/index.html`), standing in for the JavaScript application.
   It is due to move into its own repository as the client participants use; see
   `docs/client_split.md`
+- example web client for the deployed API (`examples/itp-api-basic-web-client/`, PHP adapter
+  plus plain JavaScript): LASSI against a human in `ipc`
 - conformance test of `LASSIFormalModel` against the handoff vectors of `lassi_simulations`
 
 Not yet implemented:

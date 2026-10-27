@@ -298,7 +298,8 @@ function itpRequest(string $method, string $path, ?array $payload = null, ?strin
     $errno = curl_errno($curl);
     $error = curl_error($curl);
     $httpCode = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
-    curl_close($curl);
+    // No curl_close(): it has had no effect since PHP 8.0, and from PHP 8.5 on its
+    // deprecation notice would be printed into the JSON response.
 
     if ($raw === false || $errno !== 0) {
         $message = 'The ITP server is currently not reachable.';

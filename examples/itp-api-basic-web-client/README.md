@@ -38,6 +38,7 @@ Then open `http://127.0.0.1:8080` in the browser.
 - The app starts a LASSI interaction with 10 turns.
 - Agent A is the model. Agent B is the human participant in IPC space.
 - The model starts.
+- When it is your turn, the status line reads "Choose your response." Click inside the **Self** circle to place a point (or drag it, or use the arrow keys), then press **Submit response**. The button stays disabled until a point is placed.
 - The browser talks only to `public/api.php`.
 - Registration sends a JSON object (`{}`), as required by the ITP API.
 - `api.php` keeps the API key, interaction token, session ID, and agent ID on the server.
