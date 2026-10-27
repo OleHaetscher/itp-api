@@ -75,6 +75,20 @@ class AgentSpecification(StrictModel):
     type: AgentType
     display_name: str | None = Field(default=None, alias="displayName")
     configuration: dict[str, Any] | None = None
+    model_id: str | None = Field(
+        default=None,
+        alias="modelId",
+        description=(
+            "ITP extension. Model this formal model agent runs, if it differs "
+            "from the interaction's modelId. Only valid for agents of type "
+            "model."
+        ),
+    )
+    model_version: str | None = Field(
+        default=None,
+        alias="modelVersion",
+        description="ITP extension. Exact version of the agent's modelId.",
+    )
     state_space: str | None = Field(
         default=None,
         alias="stateSpace",
@@ -170,7 +184,9 @@ class SubmitActionRequest(StrictModel):
     """
 
     action_id: str = Field(alias="actionId", min_length=1)
-    turn: int = Field(ge=1)
+    # Optional: without it the server takes the current turn. A client that
+    # re-sends a behavior after a failure can still pin it to a turn.
+    turn: int | None = Field(default=None, ge=1)
     behavior: dict[str, float]
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
@@ -239,6 +255,20 @@ class ModelDefinitionResponse(BaseModel):
     constraints: dict[str, Any]
 
 
+class AgentModelDescription(BaseModel):
+    """
+    The formal model a model agent runs.
+
+    Args:
+
+    Returns:
+    """
+
+    id: str
+    version: str
+    name: str
+
+
 class AgentDescription(BaseModel):
     """
     One agent in an interaction response.
@@ -254,6 +284,13 @@ class AgentDescription(BaseModel):
     registrationStatus: str
     displayName: str | None = None
     stateSpace: str | None = None
+    model: AgentModelDescription | None = Field(
+        default=None,
+        description=(
+            "ITP extension. The formal model the agent runs, or null for a "
+            "human agent."
+        ),
+    )
 
 
 class InvitationDescription(BaseModel):
@@ -390,6 +427,7 @@ class ActionAcceptedResponse(BaseModel):
     agentId: str
     actionId: str
     turn: int
+    cursor: str
     sessionStatus: str
     acceptedAt: str
 

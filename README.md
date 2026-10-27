@@ -97,6 +97,7 @@ itp/
 ├── docs/
 │   ├── ITP_API_Specification.pdf
 │   ├── api_design.md
+│   ├── client_split.md
 │   └── img.png
 │
 ├── itp-api-flow.html
@@ -121,6 +122,9 @@ itp/
 │
 ├── ui/
 │   └── index.html
+│
+├── examples/
+│   └── itp-api-basic-web-client/   PHP web client of the deployed API, own README
 │
 ├── src/
 │   ├── ITPSpecification.py
@@ -163,6 +167,7 @@ itp/
 │   │   └── InteractionContext.py
 │   │
 │   ├── utils/
+│   │   ├── ports.py
 │   │   └── utilfuncs.py
 │   │
 │   └── visualization/
@@ -174,7 +179,9 @@ itp/
 ├── tests/
 │   ├── data/
 │   │   └── lassi_test_vectors.json
-│   └── test_lassi_formal_model.py
+│   ├── test_api_interactions.py
+│   ├── test_lassi_formal_model.py
+│   └── test_ports.py
 │
 └── conftest.py
 ```
@@ -285,7 +292,10 @@ LASSI update step.
 The API module implements `docs/ITP_API_Specification.pdf`: it lets a
 JavaScript web application run interactions between human participants and
 formal models. All four dyad configurations are supported — model to model,
-human to model, model to human, and human to human.
+human to model, model to human, and human to human. The two model agents of an
+interaction may run different models (`agents.X.modelId`), provided a converter
+connects their state spaces, and every agent reports the model it runs, `null`
+for a human.
 
 ```text
 GET    /api/v1/models                                               model catalogue
@@ -318,7 +328,10 @@ join. Human-to-human interactions get a single-use six-digit invitation code,
 stored hashed, with a rate-limited join endpoint. Errors are RFC 9457
 `application/problem+json` documents.
 
-Communication is stateful per interaction and lives in memory. See
+Communication is stateful per interaction and lives in memory, and so do the
+interactions and their tokens: a restart drops them, and a client asking about
+an interaction the server no longer knows gets a `404` telling it to start a
+new one. See
 `docs/api_design.md` for the design, the extensions to the specification, and
 the known gaps. The previous `/info` and `/sessions` API is kept unmounted in
 `src/deprecated/`.
@@ -346,6 +359,24 @@ Default converters cover `ac <-> ipc` and `sasb <-> ipc`.
 Note: geometric/geometry constraints between state spaces are **not enforced yet** — conversions
 are numeric approximations. Converters live outside `Communication`; the runner applies them
 before delivering a message to a model with a different state space.
+
+A client joins in the state space its own scale speaks, and the API converts to and from the
+model's space. The PerTRAIN backend (`ITPGenerator`) registers its human agent in `ac`, because
+its agency and communion axes have seven states, which is the `ac` grid (1 to 7, set by
+`AC_NUM_STATES`). Which models a client can talk to therefore depends on the converters: an `ac`
+client reaches `lassi` directly and `dummy-ipc` through `ac <-> ipc`, but not `dummy-sasb`,
+because converters are not chained.
+
+A client with a different number of states, say a PerTRAIN model with five states per axis,
+needs a new state space in this repository, not a change to `ac`. `ac` is tied to LASSI's seven
+states, and changing its range silently rescales every converted message. The new space needs:
+
+1. an IBSSS description with the new range in `schema/interpersonal-behavior-state-space/`;
+2. an entry in `STATE_SPACE_SOURCES` in `src/API/StateSpaceSchema.py`, under its own
+   identifier (e.g. `ac5`);
+3. converters to every space it should reach, registered in `make_default_converter_registry`.
+   To talk to `lassi`, that includes a converter to `ac` itself;
+4. a redeploy of the API.
 
 ### `configs`
 
@@ -396,7 +427,8 @@ root):
 python -m src.run_lassi_visualization
 ```
 
-Then open http://127.0.0.1:8050 in a browser. The sliders vary the axis parameters, the axis
+Then open the address it prints, normally http://127.0.0.1:8050 (the next free port in 8050–8059
+if that one is taken; `ITP_VISUALIZATION_PORT` names one exactly). The sliders vary the axis parameters, the axis
 selector switches between agency and communion — which also switches the colour every trace of
 the current state is drawn in — and the four figures show the mean rule, the two
 targets the partner's state implies and which one the sign of `IR` picks, the tilt that carries
@@ -427,6 +459,22 @@ http://127.0.0.1:8001/api/v1/models
 http://127.0.0.1:8001/docs
 ```
 
+8001 is the first choice, not a requirement. If something already holds it —
+a leftover process from an earlier session, or an unrelated service — the API
+takes the next free port in 8001–8010 and prints which one, rather than
+refusing to start and making you evict whatever is there. `ITP_API_PORT` names
+a port instead, and is then obeyed exactly:
+
+```bash
+ITP_API_PORT=9001 python -m src.run_model_api
+```
+
+Clients do not have to be told. While the API runs it writes its base URL to
+`.itp-api-url` at the repository root (untracked), and `run_API_interaction`
+and the mock client read it, check that it answers, and otherwise search
+8001–8010 for a live catalogue. `ITP_API_BASE_URL` overrides the search
+wholesale, for an API on another host.
+
 Then, in another terminal, run (from the repository root):
 
 ```bash
@@ -453,10 +501,19 @@ python -m src.run_model_api   # http://127.0.0.1:8001
 python -m src.run_mock_ui     # http://127.0.0.1:5173
 ```
 
-Then open http://127.0.0.1:5173. The port is not arbitrary: `APISpecification` allows browser
-requests from `localhost:5173` and `127.0.0.1:5173` only, so a page served anywhere else is
-refused by CORS before it reaches a route. Serving the page from the API process itself would
-make it same-origin and hide that check.
+Then open the address `run_mock_ui` prints, normally http://127.0.0.1:5173. The port matters:
+serving the page from the API process would make it same-origin and hide the CORS check, which
+is the opposite of what a mock client is for, so `APISpecification` has to allow the page's
+origin explicitly. It allows `localhost` and `127.0.0.1` on 5173–5182, which is the range
+`run_mock_ui` picks from — so a port already in use costs nothing, and a page served from
+anywhere else is still refused before it reaches a route. `ITP_UI_PORT` names a port outside
+that range, but it then has to be set for the API process too, since that is where the origin
+list is built.
+
+The page does not have to be told which port the API took. `run_mock_ui` finds the API the same
+way `run_API_interaction` does and answers `mock-ui-config.json` with the result, which fills in
+the base URL field before the first request. The field stays editable: discovery is a
+convenience, not a constraint.
 
 Each step is a collapsible card: the one you are on is open, the ones behind you fold up with a
 one-line summary, and any of them can be reopened by clicking its header. The page walks the
@@ -464,10 +521,17 @@ whole workflow:
 
 1. **Connect** — `GET /models` renders the catalogue, and `GET /models/{modelId}` is fetched for
    each model, which is where the page gets a compiled state space schema for every space this
-   API knows. There is no endpoint for a state space on its own.
-2. **Set up** — pick a model, pick who is in the interaction, and pick the state space *you*
+   API knows. There is no endpoint for a state space on its own. For the deployed API, enter the
+   key in the API key field: it is sent as `X-API-Key` on every request, for the gateway in front
+   of the API. It stays in the field and never appears in the log.
+2. **Set up** — pick who is in the interaction, the model of each agent, and the state space *you*
    act in. A human agent may work in a space the model does not use, in which case the server
-   converts every perception into it and validates your behavior against it.
+   converts every perception into it and validates your behavior against it. The catalogue
+   above only lists the models; here the *Agent A* and *Agent B* fields pick the model each agent
+   runs, from the available ones, and show *You* or *Second participant* where a human sits.
+   With two participants, a third field picks the model the interaction is bound to, which
+   neither of you runs: the API requires one, and it sets the default state space and the turn
+   limits.
 3. **Create** — `POST /interactions`, then `POST .../register` for your agent. With two humans
    the six-digit invitation code appears; open the page in a second tab and redeem it in the
    *Join with a code* panel. With two models the server plays both and the page goes straight
@@ -493,8 +557,8 @@ stays on the server until the process is restarted.
 
 ### Where the runs are written
 
-Every interaction created with persistence enabled writes itself to `results/` when it ends,
-one folder per interaction named `<timestamp>_<session prefix>`:
+Every interaction created with persistence enabled records itself in `results/`, one folder per
+interaction named `<creation timestamp>_<session prefix>`:
 
 ```text
 results/20260914_155820_9aa18034/
@@ -506,12 +570,41 @@ results/20260914_155820_9aa18034/
 
 The message files are the same ones a local interaction produces, `_converted` copies included
 whenever the two agents work in different state spaces. `interaction.json` holds what only the
-API knows: which agent was human and which was a model, the state space each worked in, the
-model and its version, the end reason, and the bare behavior vector of every turn.
+API knows: which agent was human and which was a model, which model each ran, the state space
+each worked in, and how and when the interaction ended.
+
+The folder and `interaction.json` are written when the interaction is created, each message as
+it arrives, and `interaction.json` again when the interaction starts and when it ends. An
+interaction ended early with *End interaction* (`POST .../end`) keeps every message up to that
+point. With persistence off, nothing is written.
 
 This is a property of the API process, not of the page: `src/run_model_api.py` passes the
 repository root as `results_root`, and an `APISpecification` built without one writes nothing to
 disk. See `docs/api_design.md` under *Persistence*.
+
+## Example Web Client
+
+`examples/itp-api-basic-web-client/` is a minimal web application by Stefan for one fixed
+paradigm: the LASSI model as agent A against a human in the interpersonal circumplex (`ipc`) as
+agent B, ten turns, the model first, persistence off. The human places a point in a circumplex,
+and the model's behavior arrives converted to `ipc` by the server. It is plain HTML and
+JavaScript with a small PHP adapter (`public/api.php`), and it shows how a client keeps the API
+key and the interaction token on its own server. The browser talks only to `api.php`, which adds
+`X-API-Key` and the bearer token and forwards to the API.
+
+It runs against the deployed API only, because `api.php` accepts `https://` base URLs only. The
+key goes in `examples/itp-api-basic-web-client/.env`, copied from `.env.example`; that file is
+ignored by git and sits outside the document root `public/`. Locally, with PHP 8.2 or newer:
+
+```bash
+php -S 127.0.0.1:8080 -t examples/itp-api-basic-web-client/public
+```
+
+Then open `http://127.0.0.1:8080`. Its own README has the details.
+
+The mock client in `ui/` and this example serve different purposes. The mock client exposes
+every endpoint and logs each request, to inspect the protocol. The example is what a participant
+would see, for one paradigm, with nothing of the protocol visible.
 
 ## Tests
 
@@ -519,7 +612,7 @@ disk. See `docs/api_design.md` under *Persistence*.
 python -m pytest tests
 ```
 
-There is one test suite, and it exists for one reason. `LASSIFormalModel` is a reimplementation
+The suite that matters most exists for one reason. `LASSIFormalModel` is a reimplementation
 of the model in the `lassi_simulations` repository, which also lives a third time in the
 PerTRAIN production repository. The three are separate implementations feeding the same
 published claims, and nothing detects drift between them automatically.
@@ -537,6 +630,18 @@ When the model changes in `lassi_simulations`, the vectors are regenerated there
 (`python -m handoff.generate_test_vectors`) and the new file replaces this copy. A mismatch is a
 release blocker, not a rounding question.
 
+`tests/test_api_interactions.py` drives the API in-process: two different models in one
+interaction, a pair without a converter refused, ending early with the record kept, the record
+written at creation, and the `404` a client gets after a restart.
+
+`tests/test_ports.py` covers the port policy in `src/utils/ports.py`: an explicit port is obeyed
+or refused, never silently replaced; held candidates are skipped, also when the holder listens on
+another address than the one asked about (`0.0.0.0` against `127.0.0.1`, or `::1`), which a bind
+test alone misses on macOS; clients discover the API in the documented order, believing the
+`.itp-api-url` note only when it answers like the catalogue, and find an API bound to all
+interfaces; and the API announces itself under `127.0.0.1`, never `0.0.0.0`, which browsers have started to block.
+It uses ports the OS hands out, so an API already running on this machine does not affect it.
+
 ## Current Status
 
 Implemented:
@@ -549,12 +654,18 @@ Implemented:
 - ITP API (`docs/ITP_API_Specification.pdf`): model catalogue, interaction
   lifecycle, server-authoritative turns, participant registration, invitation
   codes, perception polling, idempotent action submission, problem+json errors
+- two different formal models in one interaction, and the model of each agent
+  in every interaction response
 - validating state space schemas compiled from the IBSSS descriptions, with
   geometry constraints
 - API client mirroring the JavaScript client
 - value conversion between state spaces (`ac <-> ipc`, `sasb <-> ipc`) via `ConverterRegistry`
 - interactive visualization of the `LASSIFormalModel` update step
-- browser mock client of the API (`ui/index.html`), standing in for the JavaScript application
+- browser mock client of the API (`ui/index.html`), standing in for the JavaScript application.
+  It is due to move into its own repository as the client participants use; see
+  `docs/client_split.md`
+- example web client for the deployed API (`examples/itp-api-basic-web-client/`, PHP adapter
+  plus plain JavaScript): LASSI against a human in `ipc`
 - conformance test of `LASSIFormalModel` against the handoff vectors of `lassi_simulations`
 
 Not yet implemented:
@@ -588,16 +699,21 @@ currently assumes a single process on `localhost`, and four of the *Known gaps* 
   proxy. That proxy must forward the client address: the `clientRequestId` replay scoping and
   the join rate limiter both key on the socket address, and behind a proxy that does not forward
   it, every client collapses into one and the rate limit becomes global.
-- **CORS.** `DEFAULT_ALLOWED_ORIGINS` in `APISpecification` is the development pair on port 5173.
+- **CORS.** `DEFAULT_ALLOWED_ORIGINS` in `APISpecification` is the loopback development range,
+  `localhost` and `127.0.0.1` on 5173–5182, so the mock client can move ports when one is taken.
   The deployed origin of the JavaScript application replaces it, and it has to be decided whether
-  the mock client keeps an origin there at all.
+  the mock client keeps an origin there at all. Ten loopback ports are harmless on a development
+  machine and would not be in a deployment.
 - **Interaction lifetime.** There is no reaper. The `expired` status and the `interactionExpired`
   and `registrationTimeout` end reasons exist and nothing sets them, so a process that is up for
   weeks accumulates interactions until it restarts. It needs an expiry, a cap on concurrent
   interactions, or both.
-- **State beyond the process.** Finished interactions are written to `results/`, but running ones
-  live in memory: a restart drops every interaction in flight, with its tokens and invitation
-  codes. Either that is accepted and stated, or the registry gets a store behind it.
+- **State beyond the process.** Records are written to `results/` as interactions run, but the
+  interactions themselves live in memory: a restart drops every one in flight, with its tokens
+  and invitation codes. This is accepted for now. A client asking about an interaction the server
+  no longer knows gets a `404` saying so, and starts a new one. The alternative, a store from
+  which interactions resume after a restart, is described with its costs in `docs/api_design.md`
+  under *Server restarts*; the hard part is serializing each formal model's state exactly.
 
 Open: which host, whether the API and the JavaScript application share one, and how it is
 deployed — a service on the machine, a container, or the university's own platform.
@@ -651,8 +767,8 @@ Smaller, and each one already has a marker where it belongs:
   `trajectories()` below it is the data it would draw
 - analysis-unit conversion (monadic ↔ transitive), which raises today and surfaces as a `422`
 - geometry constraints inside the converters, rather than only at the API boundary
-- two *different* formal models in one interaction, which the specification's request shape
-  cannot express
+- chained conversion (for example `ac` to `sasb` through `ipc`), so that every pair of models can
+  interact rather than only pairs with a direct converter
 
 - interaction trajectory visualization (`InteractionVisualizer`)
 - richer formal models

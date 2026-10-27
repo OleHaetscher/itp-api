@@ -226,17 +226,46 @@ class Communication:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         for message_index, message in enumerate(self.messages, start=1):
-            file_name = self._make_message_file_name(
+            self.save_message(
                 message=message,
                 message_index=message_index,
-            )
-
-            self.specification.save_json(
-                message=message,
-                path=output_dir / file_name,
+                output_dir=output_dir,
             )
 
         return output_dir
+
+    def save_message(
+        self,
+        message: dict[str, Any],
+        message_index: int,
+        output_dir: str | Path,
+    ) -> Path:
+        """
+        Save one stored ITP message under the name save_messages gives it.
+
+        Lets a caller write each message as it arrives, so a record survives a
+        process that dies before the session ends.
+
+        Args:
+            message: Numerical ITP message.
+            message_index: Position of the message in the session, from 1.
+            output_dir: Existing directory the file is written to.
+
+        Returns:
+            Path of the written file.
+        """
+
+        path = Path(output_dir) / self._make_message_file_name(
+            message=message,
+            message_index=message_index,
+        )
+
+        self.specification.save_json(
+            message=message,
+            path=path,
+        )
+
+        return path
 
     def _make_message_file_name(
         self,

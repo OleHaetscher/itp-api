@@ -27,6 +27,7 @@ a trusted network.
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 from typing import Any, Callable
 
@@ -64,13 +65,43 @@ from src.API.APIProblem import (
 from src.API.Interaction import Interaction
 from src.API.InteractionRegistry import InteractionRegistry, TokenScope
 from src.API.ModelCatalogue import ModelCatalogue
+from src.utils.ports import UI_PORT_CANDIDATES, UI_PORT_VARIABLE, make_origins
 
 API_PREFIX = "/api/v1"
 
-DEFAULT_ALLOWED_ORIGINS = (
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-)
+
+def make_default_allowed_origins() -> tuple[str, ...]:
+    """
+    Build the browser origins the mock client may be served from.
+
+    The client is served by a separate process, on a separate origin, which is
+    the only way the CORS configuration gets exercised at all. That leaves the
+    API having to allow an origin whose port it cannot observe, so it allows
+    the whole range ``run_mock_ui`` picks from rather than the single port the
+    client usually lands on. An explicit ``ITP_UI_PORT`` outside that range is
+    added too, because the same variable is read by both processes.
+
+    Allowing ten loopback ports is not a weakening worth worrying about: an
+    origin is trusted here only to the extent that a browser tab on this
+    machine is, and the API is a development server either way.
+
+    Args:
+
+    Returns:
+        Allowed origins.
+    """
+
+    ports = list(UI_PORT_CANDIDATES)
+
+    requested = os.environ.get(UI_PORT_VARIABLE, "").strip()
+
+    if requested.isdigit() and int(requested) not in ports:
+        ports.append(int(requested))
+
+    return make_origins(tuple(ports))
+
+
+DEFAULT_ALLOWED_ORIGINS = make_default_allowed_origins()
 
 # Upper bound on how long a long-polling request is kept open, in seconds.
 MAX_LONG_POLL_SECONDS = 30.0
@@ -171,7 +202,10 @@ class APISpecification:
             allow_origins=list(allowed_origins),
             allow_credentials=False,
             allow_methods=["GET", "POST", "OPTIONS"],
-            allow_headers=["Content-Type", "Authorization"],
+            # X-API-Key is what the gateway in front of the deployed API checks.
+            # This process ignores it, but a browser client sending it is
+            # preflighted here whenever the gateway passes CORS through.
+            allow_headers=["Content-Type", "Authorization", "X-API-Key"],
         )
 
         @self.app.middleware("http")
@@ -473,12 +507,14 @@ class APISpecification:
 
     def authenticate(
         self,
+        request: Request,
         credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     ) -> TokenScope:
         """
         Resolve the interaction token of a request into what it may address.
 
         Args:
+            request: Incoming request, whose path names the interaction.
             credentials: Bearer credentials sent with the request.
 
         Returns:
@@ -487,7 +523,10 @@ class APISpecification:
 
         token = credentials.credentials if credentials is not None else None
 
-        return self.registry.resolve_token(token=token)
+        return self.registry.resolve_token(
+            token=token,
+            session_id=request.path_params.get("session_id"),
+        )
 
     def resolve_interaction(
         self,

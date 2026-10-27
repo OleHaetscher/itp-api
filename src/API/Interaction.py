@@ -111,6 +111,7 @@ class AgentSlot:
         analysis_unit: Analysis unit the agent works in.
         display_name: Optional readable name.
         configuration: Optional model-specific configuration.
+        model_entry: Catalogue entry of the model, for agents of type "model".
         model: Formal model instance, for agents of type "model".
         registration_status: Whether the agent is registered.
         participant: Participant registered for the agent.
@@ -127,6 +128,7 @@ class AgentSlot:
     analysis_unit: str = DEFAULT_ANALYSIS_UNIT
     display_name: str | None = None
     configuration: dict[str, Any] | None = None
+    model_entry: ModelEntry | None = None
     model: BaseFormalModel | None = None
     registration_status: str = "pending"
     participant: dict[str, Any] | None = None
@@ -188,6 +190,18 @@ class AgentSlot:
 
         if self.state_space is not None:
             description["stateSpace"] = self.state_space
+
+        # Present for every agent, null for a human, so a client can tell the
+        # two apart without inferring it from the type.
+        description["model"] = (
+            {
+                "id": self.model_entry.model_id,
+                "version": self.model_entry.version,
+                "name": self.model_entry.name,
+            }
+            if self.model_entry is not None
+            else None
+        )
 
         return description
 
@@ -359,8 +373,9 @@ class Interaction:
             persistence_enabled: Whether interaction data is kept after the end.
             starting_role: Role of the agent that acts in turn 1.
             converter: Optional converter aligning values with the target agent.
-            results_root: Optional directory below which the record is written
-                when the interaction ends. Nothing is written without it.
+            results_root: Optional directory below which the record of an
+                interaction with persistence enabled is written. Nothing is
+                written without it.
 
         Returns:
         """
@@ -395,9 +410,13 @@ class Interaction:
         self.turns: list[TurnRecord] = []
         self.results_discarded = False
         self.results_folder: str | None = None
+        self.results_directory: Path | None = None
         self.schemas: dict[str, StateSpaceSchema] = {}
 
         self.cursor = 0
+
+        if self.persistence_enabled and self.results_root is not None:
+            self._open_record(root=self.results_root)
 
     def schema_for(
         self,
@@ -406,9 +425,10 @@ class Interaction:
         """
         Return the compiled schema of one state space, building it on demand.
 
-        Agents normally work in the state space of the interaction model, but a
-        human agent may declare another one, and then its perceptions and
-        behaviors are validated against that space instead.
+        Agents normally work in the state space of their own model, or of the
+        interaction model for a human agent, but a human agent may declare
+        another one, and then its perceptions and behaviors are validated
+        against that space instead.
 
         Args:
             state_space: ITP state space identifier.
@@ -417,8 +437,9 @@ class Interaction:
             State space schema.
         """
 
-        if state_space == self.model_entry.state_space:
-            return self.model_entry.state_space_schema
+        for entry in self.model_entries:
+            if state_space == entry.state_space:
+                return entry.state_space_schema
 
         if state_space not in self.schemas:
             try:
@@ -432,6 +453,29 @@ class Interaction:
                 ) from error
 
         return self.schemas[state_space]
+
+    @property
+    def model_entries(self) -> list[ModelEntry]:
+        """
+        Return the catalogue entries of every model in the interaction.
+
+        Args:
+
+        Returns:
+            The interaction model first, then any other model an agent runs.
+        """
+
+        entries = [self.model_entry]
+
+        for agent in self.agents.values():
+            is_new = agent.model_entry is not None and all(
+                agent.model_entry is not entry for entry in entries
+            )
+
+            if is_new:
+                entries.append(agent.model_entry)
+
+        return entries
 
     @property
     def state_space_schema(self):
@@ -607,6 +651,8 @@ class Interaction:
             self.current_turn = 1
             self.active_agent_ids = [self.agents[self.starting_role].agent_id]
 
+            self._write_record()
+
             self._announce_action_required()
             self._run_model_agents()
 
@@ -614,16 +660,20 @@ class Interaction:
         self,
         agent_id: str,
         action_id: str,
-        turn: int,
+        turn: int | None,
         behavior: dict[str, Any],
     ) -> dict[str, Any]:
         """
         Accept the behavior of one agent for one turn.
 
+        The response carries the agent's cursor from before the action, so a
+        client that polls with ``after`` set to it gets the perception this
+        action leads to, without keeping a cursor of its own between turns.
+
         Args:
             agent_id: Identifier of the acting agent.
             action_id: Client-generated idempotency identifier.
-            turn: Turn the action belongs to.
+            turn: Turn the action belongs to, or None for the current turn.
             behavior: Behavior vector in the agent's state space.
 
         Returns:
@@ -649,6 +699,13 @@ class Interaction:
 
             if replayed is not None:
                 return replayed
+
+            # The hash above keeps the turn as sent, so a retry without a turn
+            # still matches its original once the current turn has moved on.
+            if turn is None:
+                turn = self.current_turn
+
+            cursor = self._last_cursor(agent_id=agent_id)
 
             self._require_agent_may_act(
                 agent=agent,
@@ -688,6 +745,7 @@ class Interaction:
                 "agentId": agent_id,
                 "actionId": action_id,
                 "turn": turn,
+                "cursor": str(cursor),
                 "sessionStatus": self.status,
                 "acceptedAt": action.accepted_at,
             }
@@ -894,73 +952,121 @@ class Interaction:
                 "resultsFolder": self.results_folder,
             }
 
-    def save_results(
+    def _open_record(
         self,
         root: str | Path,
-    ) -> Path | None:
+    ) -> None:
         """
-        Write the record of the interaction to the results folder.
+        Create the results folder and write the opening interaction.json.
 
-        The ITP messages are written as the numbered files the local runner
-        produces, so an interaction driven through the API leaves the same
-        record behind as one driven by src/run_local_interaction.py. Beside
-        them, interaction.json holds what only the API knows: which agent was
-        human and which was a model, how the interaction ended, and the bare
-        behavior vector of every turn as it came off the wire.
+        The record is opened when the interaction is created rather than when
+        it ends, and every ITP message is written as it arrives, so an
+        interaction that never ends, or a process that dies, still leaves what
+        happened up to then on disk. The folder name carries the session id as
+        well as the timestamp, because two interactions can be created within
+        the same second.
 
-        The folder name carries the session id as well as the timestamp,
-        because two interactions can end within the same second.
-
-        A failed write is reported and swallowed. This runs inside the action
-        that ends an interaction, and the record is a convenience: a full disk
-        should not turn a completed interaction into a server error after its
-        status has already been set.
+        A failed write is reported and swallowed, here and in every later
+        write. The record is a convenience: a full disk should not turn a
+        running interaction into a server error.
 
         Args:
-            root: Directory below which the results folder is written.
+            root: Directory below which the results folder is created.
 
         Returns:
-            Path the record was written to, or None if it could not be written.
         """
 
         folder = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{self.session_id[:8]}"
+        directory = Path(root) / "results" / folder
+
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            print(f"  could not create the results folder of {self.session_id}: {error}")
+            return
+
+        self.results_directory = directory
+        self.results_folder = folder
+
+        self._write_record()
+
+        print(f"  recording {self.session_id} to {directory}")
+
+    def _write_record(
+        self,
+    ) -> None:
+        """
+        Write interaction.json, replacing the previous version.
+
+        interaction.json holds what only the API knows and the message files
+        do not: which agent was human and which a model, which model each ran,
+        the state space each worked in, and how and when the interaction ended.
+        The behaviors themselves are in the message files. Fields that are not
+        known yet are null until the interaction starts or ends.
+
+        Args:
+
+        Returns:
+        """
+
+        if self.results_directory is None:
+            return
 
         record = {
             "sessionId": self.session_id,
-            "status": self.status,
-            "endReason": self.end_reason,
             "model": {
                 "id": self.model_entry.model_id,
                 "version": self.model_entry.version,
             },
             "numberOfTurns": self.number_of_turns,
+            "startingAgentRole": self.starting_role,
             "context": self.context,
             "agents": {
                 role: agent.describe() for role, agent in self.agents.items()
             },
-            "turns": [turn.describe() for turn in self.turns],
-            "itpMessageCount": len(self.communication.messages),
             "createdAt": self.created_at,
+            "status": self.status,
             "startedAt": self.started_at,
             "endedAt": self.ended_at,
+            "endReason": self.end_reason,
+            "finalTurn": self.current_turn if self.has_ended else None,
+            "itpMessageCount": len(self.communication.messages),
         }
 
         try:
-            directory = self.communication.save_messages(root=root, folder=folder)
-
-            (directory / "interaction.json").write_text(
+            (self.results_directory / "interaction.json").write_text(
                 json.dumps(record, indent=4, ensure_ascii=False) + "\n",
                 encoding="utf-8",
             )
         except OSError as error:
-            print(f"  could not write the results of {self.session_id}: {error}")
-            return None
+            print(f"  could not write the record of {self.session_id}: {error}")
 
-        self.results_folder = folder
+    def _record_message(
+        self,
+        message: dict[str, Any],
+    ) -> None:
+        """
+        Store one ITP message and, if the interaction is recorded, write it.
 
-        print(f"  results written to {directory}")
+        Args:
+            message: Numerical ITP message.
 
-        return directory
+        Returns:
+        """
+
+        self.communication.receive_message(message)
+
+        if self.results_directory is None:
+            return
+
+        try:
+            self.communication.save_message(
+                message=message,
+                message_index=len(self.communication.messages),
+                output_dir=self.results_directory,
+            )
+        except OSError as error:
+            print(f"  could not write a message of {self.session_id}: {error}")
 
     def _apply_behavior(
         self,
@@ -987,12 +1093,12 @@ class Interaction:
             turn=turn,
         )
 
-        self.communication.receive_message(message)
+        self._record_message(message=message)
 
         delivered = self._convert_for_target(message=message)
 
         if delivered is not message:
-            self.communication.receive_message(delivered)
+            self._record_message(message=delivered)
 
         self._validate_experience(
             experience=delivered["values"]["data"],
@@ -1443,9 +1549,8 @@ class Interaction:
         The specification requires that every returned experience vector is
         valid according to the shared schema. When the two agents work in
         different state spaces, the vector has passed through a converter, and
-        a converter can leave the target space: the interpersonal circumplex,
-        for instance, excludes its own neutral center, which every other space
-        contains. Rather than hand a client a vector its schema rejects, the
+        the converters do not enforce the geometry of their target space in
+        general. Rather than hand a client a vector its schema rejects, the
         interaction fails here and names the conversion that produced it.
 
         Args:
@@ -1570,8 +1675,7 @@ class Interaction:
         self.ended_at = make_iso_timestamp()
         self.active_agent_ids = []
 
-        if self.persistence_enabled and self.results_root is not None:
-            self.save_results(root=self.results_root)
+        self._write_record()
 
         if not self.persistence_enabled:
             self.turns = []

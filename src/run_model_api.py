@@ -1,3 +1,20 @@
+"""
+Serve the ITP API.
+
+The port is not fixed. 8001 is tried first, because that is what the README,
+the mock client, and ``run_API_interaction`` expect to find, but a leftover
+process or an unrelated service holding it is no reason to stop: the next free
+port in 8001-8010 is taken instead, and the clients discover it. Set
+``ITP_API_PORT`` to name a port, which is then obeyed exactly::
+
+    ITP_API_PORT=9001 python -m src.run_model_api
+
+Whichever port is taken is written to ``.itp-api-url`` at the repository root
+while the process runs, because the clients are separate processes that cannot
+observe it. The file is removed on shutdown, and a leftover one is checked
+before it is believed.
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,6 +27,14 @@ from src.converter.ConverterRegistry import make_default_converter_registry
 from src.formalmodels.BaseFormalModel import BaseFormalModel
 from src.formalmodels.DummyFormalModels import DummyIPCFormalModel, DummySASBFormalModel
 from src.formalmodels.LASSIFormalModel import LASSIFormalModel
+from src.utils.ports import (
+    API_PORT_CANDIDATES,
+    API_PORT_VARIABLE,
+    announce_api_base_url,
+    make_client_base_url,
+    resolve_port,
+    withdraw_api_base_url,
+)
 
 # Interaction records are written to results/ below this directory.
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -162,10 +187,40 @@ def run_api() -> None:
     Returns:
     """
 
+    host = "0.0.0.0"
+    port = resolve_port(API_PORT_CANDIDATES, API_PORT_VARIABLE, host=host)
+
+    if port != API_PORT_CANDIDATES[0]:
+        print(
+            f"\n  Port {API_PORT_CANDIDATES[0]} is in use, serving on {port} instead."
+            f"\n  The mock client and run_API_interaction find this automatically."
+        )
+
+    # The server listens on every interface, but 0.0.0.0 is not an address to
+    # connect to (browsers have started to block it), so the printed URL and
+    # the note name the loopback address.
+    base_url = make_client_base_url(host, port)
+
+    print(f"\n  ITP API  ->  {base_url}/api/v1  (listening on all interfaces)\n")
+
+    app = make_api().app
+
+    # Clients run in other processes and cannot see which port was taken. The
+    # note is written last, so when two APIs are up the newest one is the one
+    # a client finds.
+    announce_api_base_url(base_url)
+
+    # Withdrawing it hangs off the application shutdown rather than a finally
+    # around uvicorn.run: uvicorn re-raises the signal it caught once it has
+    # shut down, so control never comes back here when the process is stopped
+    # the normal way. A note that outlives its process is survivable either
+    # way, because a client checks that it answers before believing it.
+    app.router.on_shutdown.append(withdraw_api_base_url)
+
     uvicorn.run(
-        make_api().app,
-        host="0.0.0.0",
-        port=8001,
+        app,
+        host=host,
+        port=port,
     )
 
 
