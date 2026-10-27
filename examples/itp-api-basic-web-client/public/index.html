@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f7fb">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; form-action 'none'">
+  <title>Interpersonal Interaction – ITP</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">Interpersonal Circumplex</p>
+        <h1>Interaction</h1>
+      </div>
+      <div id="turn-indicator" class="turn-indicator" aria-live="polite">Connecting…</div>
+    </header>
+
+    <section class="circumplex-layout" aria-label="Interpersonal behavior spaces">
+      <section class="circumplex-panel" aria-labelledby="other-title">
+        <h2 id="other-title">Other</h2>
+        <svg class="circumplex" id="other-circle" viewBox="0 0 360 360" aria-labelledby="other-svg-title other-svg-desc" role="img">
+          <title id="other-svg-title">Behavior of the other person</title>
+          <desc id="other-svg-desc">Interpersonal circle: dominant at the top, submissive at the bottom, hostile on the left, and friendly on the right.</desc>
+          <circle class="disc" cx="180" cy="180" r="128"></circle>
+          <line class="axis" x1="52" y1="180" x2="308" y2="180"></line>
+          <line class="axis" x1="180" y1="52" x2="180" y2="308"></line>
+          <circle class="origin" cx="180" cy="180" r="2"></circle>
+          <g id="other-history-lines" class="history-lines"></g>
+          <g id="other-history-points" class="history-points"></g>
+          <text class="axis-label" x="180" y="30" text-anchor="middle">Dominant</text>
+          <text class="axis-label" x="180" y="345" text-anchor="middle">Submissive</text>
+          <text class="axis-label" x="7" y="185" text-anchor="start">Hostile</text>
+          <text class="axis-label" x="353" y="185" text-anchor="end">Friendly</text>
+          <circle id="current-other-point" class="point point-other" cx="180" cy="180" r="9" hidden></circle>
+        </svg>
+        <p id="other-description" class="coordinate-summary">No behavior received yet</p>
+      </section>
+
+      <section class="circumplex-panel" aria-labelledby="self-title">
+        <h2 id="self-title">Self</h2>
+        <svg class="circumplex self-circumplex is-disabled" id="self-circle" viewBox="0 0 360 360"
+             tabindex="0" role="group" aria-labelledby="self-svg-title self-svg-desc">
+          <title id="self-svg-title">Choose your own behavior</title>
+          <desc id="self-svg-desc">Click or tap inside the circle to place a point. Drag to move it. Use the arrow keys for small steps, Shift plus arrow keys for larger steps, and Home for the neutral center.</desc>
+          <circle class="disc" cx="180" cy="180" r="128"></circle>
+          <line class="axis" x1="52" y1="180" x2="308" y2="180"></line>
+          <line class="axis" x1="180" y1="52" x2="180" y2="308"></line>
+          <circle class="origin" cx="180" cy="180" r="2"></circle>
+          <g id="self-history-lines" class="history-lines"></g>
+          <g id="self-history-points" class="history-points"></g>
+          <text class="axis-label" x="180" y="30" text-anchor="middle">Dominant</text>
+          <text class="axis-label" x="180" y="345" text-anchor="middle">Submissive</text>
+          <text class="axis-label" x="7" y="185" text-anchor="start">Hostile</text>
+          <text class="axis-label" x="353" y="185" text-anchor="end">Friendly</text>
+          <circle id="current-self-point" class="point point-self" cx="180" cy="180" r="9" hidden></circle>
+        </svg>
+        <p id="self-description" class="coordinate-summary">Waiting for the next turn</p>
+      </section>
+    </section>
+
+    <section class="controls" aria-label="Interaction controls">
+      <p id="status-message" class="status" aria-live="polite" role="status">Connecting to the other person…</p>
+      <p id="error-message" class="error-message" role="alert" hidden></p>
+      <div class="action-row">
+        <button id="submit-button" class="button button-primary" disabled>Submit response <span aria-hidden="true">→</span></button>
+        <button id="restart-button" class="button button-secondary" hidden>Start new interaction</button>
+      </div>
+    </section>
+
+    <footer class="page-footer">LASSI v0.2.0 · IPC · 10 turns</footer>
+  </main>
+</body>
+</html>
