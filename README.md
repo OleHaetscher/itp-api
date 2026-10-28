@@ -124,11 +124,13 @@ itp/
 │   └── index.html
 │
 ├── examples/
-│   └── itp-api-basic-web-client/   PHP web client of the deployed API, own README
+│   ├── itp-api-basic-web-client/   PHP web client of the deployed API, own README
+│   └── interaction-report/         a recorded run, its dialogue and its report (Figure 2), own README
 │
 ├── src/
 │   ├── ITPSpecification.py
 │   ├── run_API_interaction.py
+│   ├── run_interaction_report.py
 │   ├── run_lassi_visualization.py
 │   ├── run_local_interaction.py
 │   ├── run_mock_ui.py
@@ -173,13 +175,18 @@ itp/
 │   └── visualization/
 │       ├── BaseVisualizer.py
 │       ├── FormalModelVisualizer.py
+│       ├── InteractionRecord.py
+│       ├── InteractionReport.py
 │       ├── InteractionVisualizer.py
-│       └── LASSIFormalModelVisualizer.py
+│       ├── LASSIFormalModelVisualizer.py
+│       └── templates/
+│           └── interaction_report.html
 │
 ├── tests/
 │   ├── data/
 │   │   └── lassi_test_vectors.json
 │   ├── test_api_interactions.py
+│   ├── test_interaction_report.py
 │   ├── test_lassi_formal_model.py
 │   └── test_ports.py
 │
@@ -286,6 +293,13 @@ reads as agency or as communion without the caption having to say so. `FormalMod
 interaction data, `InteractionVisualizer` renders a sequence of ITP messages as a trajectory
 (not implemented yet), and `LASSIFormalModelVisualizer` is the interactive walk-through of one
 LASSI update step.
+
+The interaction report is not a Dash dashboard, because it has to leave the machine as one file.
+`InteractionRecord` reads a results folder and pairs each behavior as sent with its converted
+copy; `InteractionReport` writes it into `templates/interaction_report.html`, a self-contained
+page that draws the figure as SVG. It takes its colours from `BaseVisualizer`. The two agents are
+blue and amber, because the agency and communion colours stay reserved for the axes. See
+*Interaction Report and Paper Figures* below.
 
 ### `API`
 
@@ -582,6 +596,54 @@ This is a property of the API process, not of the page: `src/run_model_api.py` p
 repository root as `results_root`, and an `APISpecification` built without one writes nothing to
 disk. See `docs/api_design.md` under *Persistence*.
 
+## Interaction Report and Paper Figures
+
+The two figures of the ITP paper are produced here, so that each one is also something a user of
+the repository can open.
+
+**Figure 1**, the workflow on the platform, is section 00 of `itp-api-flow.html`. The page has
+*Download SVG* and *Download PNG* buttons under the figure; the PNG is 3720 px wide, which is
+600 dpi at 6.2 in. The figure is plain SVG with its colours and fonts written out, so the export
+looks the same in Word as in the browser.
+
+**Figure 2** is one frame of an interaction report. The report is written from a results folder
+alone, the record the API keeps for an interaction with persistence enabled:
+
+```bash
+python -m src.run_interaction_report results/<folder>
+python -m src.run_interaction_report --latest
+```
+
+It writes `interaction_report.html` into the folder (or where `--out` says): one file with no
+dependencies that opens from disk. A slider steps through the interaction turn by turn, and
+checkboxes choose the panels:
+
+- **Dialogue.** The text of each turn, if a dialogue file is attached.
+- **State spaces.** One plane per agent in its own state space: filled markers for what the
+  agent sent, hollow markers for the partner's behavior as the converter delivered it. A
+  dotted arrow carries the selected turn from where it was sent to where it arrived. Both
+  planes put communion to the right and agency up, the orientation of the circumplex, so an
+  `ac` box and the `ipc` circle can be compared directly.
+- **Over turns.** Each dimension of one state space against the turn, both agents, the
+  converted series dashed. An angle is not drawn across 0/360 and is left out where `R = 0`.
+
+*Download SVG* and *Download PNG* export the figure at the selected turn, so the printed figure is
+a frame of the report and the report can go out as the supplement.
+
+Text from a paradigm is not on the platform; for PerTRAIN it stays in PerTRAIN. Supply it as a
+CSV with the columns `turn`, `role` and `text`, where `turn` is the API turn (one message each:
+A acts in 1, B in 2) and `role` the agent that acted in it. A row that names a turn the record
+does not have, or the wrong agent for it, is refused rather than shown beside the wrong numbers:
+
+```bash
+python -m src.run_interaction_report results/<folder> --text dialogue.csv \
+    --text-source "PerTRAIN chat export" --label A="IPC model" --label B="LASSI model"
+```
+
+`--panels`, `--turn` and `--time-space` set what the page shows when it opens, and `--title` its
+heading. `examples/interaction-report/` holds the run behind Figure 2: the IPC model against the
+LASSI model for eight turns, with an illustrative dialogue written to fit the recorded values.
+
 ## Example Web Client
 
 `examples/itp-api-basic-web-client/` is a minimal web application by Stefan for one fixed
@@ -634,6 +696,11 @@ release blocker, not a rounding question.
 interaction, a pair without a converter refused, ending early with the record kept, the record
 written at creation, and the `404` a client gets after a restart.
 
+`tests/test_interaction_report.py` covers the report: each behavior paired with its converted
+copy (or received as sent when both agents share a space), a dialogue file joined on turn and
+role and refused when it does not fit, communion to the right and agency up in both kinds of
+plane, a page that embeds the record and fetches nothing, and the runner on the newest folder.
+
 `tests/test_ports.py` covers the port policy in `src/utils/ports.py`: an explicit port is obeyed
 or refused, never silently replaced; held candidates are skipped, also when the holder listens on
 another address than the one asked about (`0.0.0.0` against `127.0.0.1`, or `::1`), which a bind
@@ -667,6 +734,9 @@ Implemented:
 - example web client for the deployed API (`examples/itp-api-basic-web-client/`, PHP adapter
   plus plain JavaScript): LASSI against a human in `ipc`
 - conformance test of `LASSIFormalModel` against the handoff vectors of `lassi_simulations`
+- interaction report from a results folder (`src/run_interaction_report.py`): a self-contained
+  HTML page that steps through the turns, with the dialogue from a separate file, and exports
+  the figure as SVG or PNG; Figure 1 of the paper is section 00 of `itp-api-flow.html`
 
 Not yet implemented:
 
@@ -763,8 +833,10 @@ Three things follow from that, and none of them exist yet:
 
 Smaller, and each one already has a marker where it belongs:
 
-- the trajectory dashboard — `InteractionVisualizer.build_body` raises `NotImplementedError`, and
-  `trajectories()` below it is the data it would draw
+- the trajectory dashboard: `InteractionVisualizer.build_body` raises `NotImplementedError`. The
+  interaction report now draws trajectories outside Dash. `trajectories()` there still collects
+  original and converted messages together, so it mixes state spaces whenever the agents differ;
+  a dashboard should read through `InteractionRecord` instead
 - analysis-unit conversion (monadic ↔ transitive), which raises today and surfaces as a `422`
 - geometry constraints inside the converters, rather than only at the API boundary
 - chained conversion (for example `ac` to `sasb` through `ipc`), so that every pair of models can
