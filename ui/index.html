@@ -299,6 +299,7 @@
   .dimension.out-of-range { border-color: color-mix(in srgb, var(--warn) 55%, transparent); }
   .dimension label { margin-top: 0; }
   .dimension .bounds { color: var(--muted-fg); font-size: 12px; margin-top: 6px; }
+  .dimension select + div label, .dimension .row label { margin-top: 12px; }
 
   pre {
     font-family: var(--mono);
@@ -426,6 +427,8 @@
           <label>Interaction model <span class="hint">— neither of you runs it; it sets the default state space and the turn limits</span></label>
           <select id="binding-model"></select>
         </div>
+
+        <div id="parameters"></div>
 
         <label>Your state space <span class="hint">— the space you act in</span></label>
         <select id="state-space"></select>
@@ -906,6 +909,8 @@ function interactionModelId() {
 }
 
 function updateStateSpaces() {
+  renderParameters();
+
   const modelId = interactionModelId();
   const definition = state.definitions[modelId];
 
@@ -944,6 +949,94 @@ function updateStateSpaces() {
       : `${modelId} · ${modelSpace}`);
 }
 
+// --------------------------------------------------------------- parameters
+
+function modelAgents() {
+  // The roles that run a model in the chosen flow, with the model each runs.
+  const flow = element("flow").value;
+  const roles = [];
+  if (flow === "model-model") roles.push(["A", element("model-a").value]);
+  if (flow !== "human-human") roles.push(["B", element("model-b").value]);
+  return roles;
+}
+
+function renderParameters() {
+  // One box per model agent whose model publishes a parameter space. The
+  // defaults leave the configuration out, so such a request looks exactly as
+  // it did before parameters existed.
+  const container = element("parameters");
+  container.innerHTML = "";
+
+  for (const [role, modelId] of modelAgents()) {
+    const space = state.definitions[modelId]?.parameterSpace;
+    if (!space) continue;
+
+    const groups = {};
+    for (const parameter of space.parameters) {
+      (groups[parameter.group] ??= []).push(parameter);
+    }
+
+    const inputs = Object.values(groups).map((parameters) =>
+      `<div class="row">` +
+      parameters.map((parameter) => {
+        const open = parameter.exclusiveBounds ? "(" : "[";
+        const close = parameter.exclusiveBounds ? ")" : "]";
+        return `<div><label>${parameter.label} <span class="hint">` +
+          `${open}${parameter.minimum}, ${parameter.maximum}${close}</span></label>` +
+          `<input type="number" step="0.01" id="parameter-${role}-${parameter.group}-${parameter.name}" ` +
+          `value="${parameter.default}"></div>`;
+      }).join("") +
+      `</div>`).join("");
+
+    const box = document.createElement("div");
+    box.className = "dimension";
+    box.innerHTML =
+      `<label>Parameters of agent ${role} <span class="hint">— ${modelId}</span></label>` +
+      `<select id="selection-${role}">` +
+      `<option value="default">the model's defaults</option>` +
+      `<option value="random">drawn at random from the ranges</option>` +
+      `<option value="explicit">set here</option>` +
+      `</select>` +
+      `<div id="seed-row-${role}" class="hidden"><label>Random seed <span class="hint">` +
+      `— empty: the server picks one and reports it</span></label>` +
+      `<input type="number" step="1" id="seed-${role}"></div>` +
+      `<div id="values-${role}" class="hidden">${inputs}</div>`;
+    container.appendChild(box);
+
+    element(`selection-${role}`).addEventListener("change", (event) => {
+      show(`seed-row-${role}`, event.target.value === "random");
+      show(`values-${role}`, event.target.value === "explicit");
+    });
+  }
+}
+
+function configurationFor(role, modelId) {
+  const space = state.definitions[modelId]?.parameterSpace;
+  const selection = element(`selection-${role}`)?.value;
+  if (!space || !selection || selection === "default") return undefined;
+
+  if (selection === "random") {
+    const seed = element(`seed-${role}`).value;
+    return seed === ""
+      ? { parameterSelection: "random" }
+      : { parameterSelection: "random", randomSeed: Number(seed) };
+  }
+
+  // Values out of range are sent as they are, so the server's 422 shows in
+  // the log rather than being pre-empted here.
+  const parameters = {};
+  for (const parameter of space.parameters) {
+    const value = element(`parameter-${role}-${parameter.group}-${parameter.name}`).value;
+    (parameters[parameter.group] ??= {})[parameter.name] = Number(value);
+  }
+  return { parameters };
+}
+
+function withConfiguration(agent, role, modelId) {
+  const configuration = configurationFor(role, modelId);
+  return configuration ? { ...agent, configuration } : agent;
+}
+
 function renderSchema(space) {
   state.stateSpace = space;
   element("schema").textContent = JSON.stringify(state.schemas[space] ?? {}, null, 2);
@@ -958,7 +1051,9 @@ function agentsFor(flow) {
   const you = { type: "human", displayName };
   if (space) you.stateSpace = space;
 
-  if (flow === "human-model") return { A: you, B: { type: "model" } };
+  if (flow === "human-model") {
+    return { A: you, B: withConfiguration({ type: "model" }, "B", element("model-b").value) };
+  }
   if (flow === "human-human") {
     return { A: you, B: { type: "human", displayName: "Second participant" } };
   }
@@ -967,7 +1062,10 @@ function agentsFor(flow) {
   const partnerModel = element("model-b").value;
   if (partnerModel !== element("model-a").value) partner.modelId = partnerModel;
 
-  return { A: { type: "model" }, B: partner };
+  return {
+    A: withConfiguration({ type: "model" }, "A", element("model-a").value),
+    B: withConfiguration(partner, "B", partnerModel),
+  };
 }
 
 async function createInteraction() {
@@ -1118,8 +1216,26 @@ function agentModels(interaction) {
   return Object.entries(interaction.agents)
     .map(([role, agent]) =>
       `<dt>agent ${role}</dt><dd>${agent.model ? agent.model.id : "human"}` +
-      `${agent.stateSpace ? ` · ${agent.stateSpace}` : ""}</dd>`)
+      `${agent.stateSpace ? ` · ${agent.stateSpace}` : ""}` +
+      `${agent.parameters ? `<br>${describeParameters(agent.parameters)}` : ""}</dd>`)
     .join("");
+}
+
+function describeParameters(parameters) {
+  // "A: BD 2.95, IR -0.70 · C: ..." followed by how the values were chosen.
+  const values = Object.entries(parameters.values)
+    .map(([group, entries]) => `${group}: ` +
+      Object.entries(entries).map(([name, value]) => `${name} ${value.toFixed(2)}`).join(", "))
+    .join(" · ");
+  const total = Object.values(parameters.values).reduce((n, entries) => n + Object.keys(entries).length, 0);
+  const chosen = parameters.selection === "random"
+    ? `random, seed ${parameters.randomSeed}`
+    : "defaults";
+  const explicit = parameters.explicit ?? [];
+  const how = explicit.length === 0 ? chosen
+    : explicit.length === total ? "set"
+    : `set ${explicit.join(", ")}; others ${chosen}`;
+  return `${values} (${how})`;
 }
 
 async function refreshStatus() {
