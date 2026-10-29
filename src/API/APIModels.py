@@ -74,7 +74,16 @@ class AgentSpecification(StrictModel):
 
     type: AgentType
     display_name: str | None = Field(default=None, alias="displayName")
-    configuration: dict[str, Any] | None = None
+    configuration: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Model-specific configuration of a model agent. For a model with a "
+            "parameterSpace: parameterSelection ('default' or 'random'), "
+            "randomSeed (random only) and parameters keyed by group, then by "
+            "name, which take precedence. A model without a parameterSpace "
+            "and a human agent take none."
+        ),
+    )
     model_id: str | None = Field(
         default=None,
         alias="modelId",
@@ -253,6 +262,7 @@ class ModelDefinitionResponse(BaseModel):
     stateSpaceSchema: dict[str, Any]
     stateSpace: dict[str, Any]
     constraints: dict[str, Any]
+    parameterSpace: dict[str, Any] | None = None
 
 
 class AgentModelDescription(BaseModel):
@@ -289,6 +299,14 @@ class AgentDescription(BaseModel):
         description=(
             "ITP extension. The formal model the agent runs, or null for a "
             "human agent."
+        ),
+    )
+    parameters: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "ITP extension. For a model with a parameterSpace: how the "
+            "parameters were chosen (selection, randomSeed) and the values the "
+            "agent runs with."
         ),
     )
 

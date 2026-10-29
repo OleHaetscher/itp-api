@@ -112,6 +112,8 @@ class AgentSlot:
         display_name: Optional readable name.
         configuration: Optional model-specific configuration.
         model_entry: Catalogue entry of the model, for agents of type "model".
+        parameters: Selection, seed and values of the model parameters the
+            agent runs with, for a model with a parameter space.
         model: Formal model instance, for agents of type "model".
         registration_status: Whether the agent is registered.
         participant: Participant registered for the agent.
@@ -129,6 +131,7 @@ class AgentSlot:
     display_name: str | None = None
     configuration: dict[str, Any] | None = None
     model_entry: ModelEntry | None = None
+    parameters: dict[str, Any] | None = None
     model: BaseFormalModel | None = None
     registration_status: str = "pending"
     participant: dict[str, Any] | None = None
@@ -202,6 +205,11 @@ class AgentSlot:
             if self.model_entry is not None
             else None
         )
+
+        # Only for a model that lets agents differ, so a record says which
+        # parameters this agent ran with and how they were chosen.
+        if self.parameters is not None:
+            description["parameters"] = self.parameters
 
         return description
 
@@ -360,6 +368,7 @@ class Interaction:
         starting_role: str = "A",
         converter=None,
         results_root: str | Path | None = None,
+        client_request_id: str | None = None,
     ) -> None:
         """
         Initialize an interaction.
@@ -376,6 +385,8 @@ class Interaction:
             results_root: Optional directory below which the record of an
                 interaction with persistence enabled is written. Nothing is
                 written without it.
+            client_request_id: The client's idempotency identifier, kept in
+                the record so a client can find its interaction there.
 
         Returns:
         """
@@ -391,6 +402,7 @@ class Interaction:
         self.starting_role = starting_role
         self.converter = converter
         self.results_root = results_root
+        self.client_request_id = client_request_id
 
         self.communication = Communication(context=context)
 
@@ -1014,6 +1026,7 @@ class Interaction:
 
         record = {
             "sessionId": self.session_id,
+            "clientRequestId": self.client_request_id,
             "model": {
                 "id": self.model_entry.model_id,
                 "version": self.model_entry.version,

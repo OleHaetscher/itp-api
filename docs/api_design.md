@@ -26,6 +26,7 @@ reference in `src/deprecated/APISpecification_deprecated.py` and
 | `src/API/InteractionRegistry.py` | Interactions, tokens, invitations, idempotency, rate limiting |
 | `src/API/Invitation.py` | Six-digit codes, token generation, join rate limiter |
 | `src/API/ModelCatalogue.py` | Model entries, versions, constraints, model factories |
+| `src/formalmodels/ParameterSpace.py` | Parameters a model lets each agent choose; resolves `configuration` |
 | `src/API/StateSpaceSchema.py` | IBSSS description → validating JSON Schema, geometry checks |
 | `src/API/APIClient.py` | Python client mirroring the JavaScript client |
 
@@ -236,6 +237,48 @@ exactly as the specification describes.
 | A repeated `clientRequestId` returns the current state | Lets a client that lost its state recover the session and token and continue, instead of getting the creation response with its stale turn. |
 | `modelId` and `modelVersion` on a model agent | Lets the two agents run different models. See *Two models in one interaction*. |
 | `model` on every agent | The model the agent runs, as `{id, version, name}`, or `null` for a human. In the status, creation, join and results responses. |
+| `parameterSpace` on a model definition | The parameters an interaction may choose per agent, with range and default, and the ones every agent runs with (`fixed`). `null` for a model without any. See *Model parameters*. |
+| `parameters` on a model agent | What the agent runs with: `selection`, `randomSeed`, the parameters set `explicit`ly, and the `values`. Only for a model with a `parameterSpace`. |
+
+The specification already lets a model agent carry a model-specific
+`configuration`; what it may contain is defined here, under *Model parameters*,
+and anything else is refused.
+
+## Model parameters
+
+A model entry may carry a `ParameterSpace` (`src/formalmodels/ParameterSpace.py`):
+the parameters that may differ between agents, each with a group (for LASSI the
+axis), a range, whether its bounds are excluded, and a default. LASSI publishes
+`BD` (strictly inside 1 to 7) and `IR` (−1 to +1) per axis, defaulting to
+`configs/formal_model_parameters.yaml`; `tau`, `lambda_relax`, the axis signs
+and the number of states are reported as `fixed`. The dummy models publish no
+space.
+
+`agents.X.configuration` on a model agent selects the values:
+
+- `parameterSelection`: `default` (the configured values) or `random`, a
+  uniform draw from every published range, rounded to two decimals, an excluded
+  bound kept one step away;
+- `randomSeed`: the seed of the draw. Without it the server draws one and
+  reports it, so every draw can be repeated;
+- `parameters`: values keyed by group, then by name, which take precedence over
+  the selection.
+
+They are applied in that order: defaults, draw, explicit values. The registry
+resolves the configuration before the model is instantiated
+(`ModelEntry.resolve_configuration`) and passes the values to the model factory,
+which for LASSI merges them into the configured parameters
+(`lassi_parameters_with`). A configuration the space cannot meet is a `422`
+`invalid-configuration`: an unknown key or parameter, a non-number, a value out
+of range, a seed without a draw. So is any configuration on a human agent or on
+a model without a space; the specification's free-form example
+(`{"strategy": "adaptive"}`) is refused rather than stored and ignored, because
+a client would read silence as acceptance.
+
+The resolved parameters are part of the agent, so they appear wherever the
+agent does (creation, status, join, results) and in `interaction.json`. A
+repeated `clientRequestId` returns the stored creation response, so a client
+that recovers its session also recovers the same draw.
 
 ## Two models in one interaction
 
@@ -439,8 +482,10 @@ a server with several in flight can do.
 The record is written as the interaction runs, not at its end:
 
 1. At creation, the folder and `interaction.json` with what does not change:
-   the agents, the model and state space of each, the context, the number of
-   turns, and the starting role.
+   the agents, the model, state space and parameters of each, the context, the
+   number of turns, the starting role, and the client's `clientRequestId`
+   (which lets a client such as PerTRAIN find its interaction among the
+   folders).
 2. Each ITP message as it is stored, through `Communication.save_message`.
 3. `interaction.json` again when the interaction starts, and when it ends
    (normally, through `/end`, or by failing), with status, end reason, final
@@ -570,12 +615,11 @@ These are real and should be decided rather than discovered later.
 - **Restarts.** Interactions and tokens do not survive the process. The
   client has to start a new interaction. See *Server restarts* for the
   alternative and what it would take.
-- **Model configuration.** `agents.X.configuration` is accepted and stored but
-  not passed to the model factory, so two agents of one interaction always run
-  the same parameters. `LASSIFormalModel` does take per-instance parameters (its
-  `parameters` argument overrides the config), so the missing piece is the model
-  factory signature and a per-model schema for what `configuration` may contain,
-  not the models.
+- **Parameter selection beyond uniform draws.** A random draw is uniform over
+  each published range and independent across parameters. Draws from a design
+  grid, from a distribution, or with constraints between parameters are not
+  offered; a client that needs them computes the values and sends them under
+  `parameters`.
 
 ## Endpoint summary
 
