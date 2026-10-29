@@ -1038,7 +1038,7 @@
           </thead>
           <tbody>
             <tr><td class="st r-model">GET</td><td class="ep">/models</td><td class="pu">The models available for new interactions.</td><td class="auth">—</td><td class="st">200</td></tr>
-            <tr><td class="st r-model">GET</td><td class="ep">/models/{modelId}</td><td class="pu">Model definition and the shared <code>stateSpaceSchema</code>.</td><td class="auth">—</td><td class="st">200</td></tr>
+            <tr><td class="st r-model">GET</td><td class="ep">/models/{modelId}</td><td class="pu">Model definition, the shared <code>stateSpaceSchema</code>, and the <code>parameterSpace</code> of a model whose agents may differ.</td><td class="auth">—</td><td class="st">200</td></tr>
             <tr><td class="st r-api">POST</td><td class="ep">/interactions</td><td class="pu">Create an interaction. Returns the token, and an invitation code when a second human must join.</td><td class="auth">—</td><td class="st">201</td></tr>
             <tr><td class="st r-api">POST</td><td class="ep">/interactions/join</td><td class="pu">Redeem a six-digit code, register the invited participant, receive a token.</td><td class="auth">—</td><td class="st">200</td></tr>
             <tr><td class="st r-model">GET</td><td class="ep">/interactions/{sessionId}</td><td class="pu">Status, turn, active agents, invitation status without the code.</td><td class="auth r-api">bearer</td><td class="st">200</td></tr>
@@ -1063,7 +1063,7 @@
             <tr><td class="st"><span class="status-code r-convert">404</span></td><td class="pu">Unknown model, interaction, agent, or invitation code.</td></tr>
             <tr><td class="st"><span class="status-code r-convert">409</span></td><td class="pu">Wrong turn, agent not expected to act, already acted, actionId reused with different content, invitation already used, registration for a different participant.</td></tr>
             <tr><td class="st"><span class="status-code r-convert">410</span></td><td class="pu">Invitation expired; or results discarded because persistence was disabled.</td></tr>
-            <tr><td class="st"><span class="status-code r-convert">422</span></td><td class="pu">State vector fails the stateSpaceSchema, or the configuration violates the model constraints.</td></tr>
+            <tr><td class="st"><span class="status-code r-convert">422</span></td><td class="pu">State vector fails the stateSpaceSchema, or the configuration violates the model constraints or its parameter space.</td></tr>
             <tr><td class="st"><span class="status-code r-convert">429</span></td><td class="pu">Too many failed invitation attempts. Carries <code>retryAfterSeconds</code>.</td></tr>
             <tr><td class="st"><span class="status-code r-stop">500</span></td><td class="pu">A formal model failed. The interaction ends with <code>modelFailure</code>.</td></tr>
           </tbody>
