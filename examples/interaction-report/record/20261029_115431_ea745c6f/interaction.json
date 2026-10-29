@@ -1,0 +1,42 @@
+{
+    "sessionId": "ea745c6f-f21e-4f69-a54f-54369e854152",
+    "clientRequestId": "084e31a1-25ed-48cf-b7b4-0e7cb8824a39",
+    "model": {
+        "id": "dummy-ipc",
+        "version": "0.2.0"
+    },
+    "numberOfTurns": 200,
+    "startingAgentRole": "A",
+    "context": "workplace_colleague_conversation",
+    "agents": {
+        "A": {
+            "agentId": "e0401f64-4998-45ad-9558-fde074aea5a0",
+            "role": "A",
+            "type": "human",
+            "registrationStatus": "registered",
+            "displayName": "User",
+            "stateSpace": "ac",
+            "model": null
+        },
+        "B": {
+            "agentId": "6ec085b3-ebd5-4ebe-9ddf-b899cfd76c6c",
+            "role": "B",
+            "type": "model",
+            "registrationStatus": "registered",
+            "displayName": "Model",
+            "stateSpace": "ipc",
+            "model": {
+                "id": "dummy-ipc",
+                "version": "0.2.0",
+                "name": "Dummy interpersonal circumplex model"
+            }
+        }
+    },
+    "createdAt": "2026-10-29T10:54:31Z",
+    "status": "terminated",
+    "startedAt": "2026-10-29T10:54:31Z",
+    "endedAt": "2026-10-29T10:55:10Z",
+    "endReason": "terminatedByClient",
+    "finalTurn": 9,
+    "itpMessageCount": 16
+}

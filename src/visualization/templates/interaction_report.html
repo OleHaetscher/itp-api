@@ -38,7 +38,7 @@
     background: var(--bg); color: var(--ink); font-family: var(--sans);
     line-height: 1.55; -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 1240px; margin: 0 auto; padding: clamp(1.5rem, 4vw, 3rem) 16px; }
+  .wrap { max-width: 1800px; margin: 0 auto; padding: clamp(1.5rem, 4vw, 3rem) 16px; }
   .eyebrow {
     font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
     color: var(--primary); margin: 0 0 6px;
@@ -137,7 +137,7 @@
     Written by <code>python -m src.run_interaction_report</code> from the ITP record alone; the dialogue, if shown,
     comes from a separate file joined on turn and role. Filled markers are behavior as sent, in the sender's own
     state space; hollow markers are the partner's behavior as the converter delivered it into this space.
-    The PNG export is drawn at three times the figure's width, 600 dpi at 6.2 in.
+    The PNG export is drawn at three times the figure's width, 600 dpi at the print width the report was written for.
   </footer>
 </div>
 
@@ -147,19 +147,32 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
 (function () {
   "use strict";
 
-  // Figure geometry, in SVG units. 1240 units are printed at 6.2 in, so
-  // 22 units are 7.9 pt; nothing that carries meaning is set below 19.
-  const W = 1240;
+  // Figure geometry, in SVG units: 200 per inch of print width, so 6.2 in
+  // (portrait) is 1240 units and 9 in (landscape) 1800, and 22 units are
+  // 7.9 pt either way; nothing that carries meaning is set below 19. The
+  // dialogue keeps its share of the width, so a wider figure wraps less.
+  const UNITS_PER_INCH = 200;
+  const W = Math.round(UNITS_PER_INCH * DATA.printWidth);
   const FONT = "Helvetica, Arial, sans-serif";
   const MONO = "Menlo, Consolas, monospace";
-  const SIZE = { title: 23, body: 21, small: 19 };
+  const SIZE = { title: 25, body: 21, small: 23 };
   const GAP = 34;
-  const DIALOGUE_W = 430;
+  // The dialogue column takes 30% to 55% of the width: the share closest to
+  // 40% at which the charts over turns, stretched to end level with the
+  // dialogue, stay between DIMENSIONS_H and DIMENSIONS_MAX_H (see layout).
+  const DIALOGUE_SHARE = { min: 0.3, preferred: 0.4, max: 0.55, step: 0.005 };
+  let dialogueW = Math.round(W * DIALOGUE_SHARE.preferred);
   const LANE_W = 130;
+  // Height of the charts over turns: at least DIMENSIONS_H; with a dialogue
+  // they stretch so that both columns end on one line, and the dialogue
+  // widens only as far as it takes to keep them within DIMENSIONS_MAX_H.
   const DIMENSIONS_H = 270;
-  const DIALOGUE_MAX_H = 1000;
-  const LEGEND_H = 46;
-  const LEGEND_ROW = 32;
+  const DIMENSIONS_MAX_H = 380;
+  const DIALOGUE_MAX_H = 1300;
+  // Every panel opens with a lettered head and a rule under it.
+  const PANEL_HEAD_H = 52;
+  const LEGEND_ROW = 34;
+  const LEGEND_KEY = 44;
   const CARD = { padding: 10, header: 22, gap: 8, width: 0.88 };
   const PNG_SCALE = 3;
 
@@ -223,7 +236,37 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
 
   function agentColor(role) { return role === roles[0] ? P.agentA : P.agentB; }
   function partnerOf(role) { return roles.find(function (other) { return other !== role; }); }
-  function agentName(role) { return "Agent " + role + " · " + DATA.agents[role].label; }
+  function describeParameters(parameters) {
+    // "A: BD 2.95, IR -0.70, C: ..." and how the values were chosen.
+    const values = Object.keys(parameters.values).map(function (group) {
+      const entries = parameters.values[group];
+      return group + ": " + Object.keys(entries).map(function (name) {
+        return name + " " + entries[name].toFixed(2);
+      }).join(", ");
+    }).join(", ");
+    const how = parameters.selection === "random" ? "drawn at random, seed " + parameters.randomSeed : "model defaults";
+    const explicit = parameters.explicit || [];
+    return values + " (" + (explicit.length ? "set " + explicit.join(", ") + "; others " + how : how) + ")";
+  }
+  // Letters follow the panels shown, in order, so a frame never skips one.
+  let panelCount = 0;
+  function panelHead(group, box, title) {
+    const letter = String.fromCharCode(97 + panelCount++);
+    const head = text(group, box.x, box.y + 24, "", { "font-size": SIZE.title, "font-weight": 700, fill: P.text });
+    const tag = document.createElementNS(NS, "tspan");
+    tag.textContent = letter + ")";
+    head.appendChild(tag);
+    // A gap by offset, because SVG collapses repeated spaces.
+    const rest = document.createElementNS(NS, "tspan");
+    rest.setAttribute("dx", 12);
+    rest.textContent = title;
+    head.appendChild(rest);
+    node("line", { x1: box.x, y1: box.y + 38, x2: box.x + box.w, y2: box.y + 38, stroke: P.grid, "stroke-width": 1.5 }, group);
+    return { x: box.x, y: box.y + PANEL_HEAD_H, w: box.w, h: box.h - PANEL_HEAD_H };
+  }
+
+  function shortName(role) { return DATA.agents[role].label.split(/,| \(/)[0]; }
+  function agentName(role) { return "Agent " + role + ": " + DATA.agents[role].label; }
 
   function spaceById(id) {
     for (const role of roles) {
@@ -265,12 +308,23 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
   // The planes are square, so their height follows from the width they get.
   // 56 units on the left of a plane for its axis, 30 on the right for labels.
   function planeSize(width) { return Math.min((width - LANE_W) / 2 - 56 - 30, 420); }
-  function planesHeight(width) { return 70 + planeSize(width) + 60; }
+  function planesHeight(width) { return PANEL_HEAD_H + planeHeaderHeight(width) + planeSize(width) + 60; }
+
+  // Each plane is titled with its state space, wrapped to at most two lines.
+  function planeSubtitle(role, width) {
+    const space = DATA.agents[role].stateSpace;
+    return wrap(space.caption + " (" + space.abbreviation + ")", SIZE.body, (width - LANE_W) / 2).slice(0, 2);
+  }
+  function planeHeaderHeight(width) {
+    const lines = Math.max.apply(null, roles.map(function (role) { return planeSubtitle(role, width).length; }));
+    return 70 + (lines - 1) * LINE_H;
+  }
 
   // The dialogue column is sized for the whole interaction, not the selected
   // turn, so the figure keeps its height while stepping.
   function dialogueHeight() {
-    let height = 44;
+    // At the current dialogueW, which cardLines wraps to.
+    let height = PANEL_HEAD_H;
     turns.forEach(function (entry, index) {
       height += cardHeight(entry) + (index ? CARD.gap : 0);
     });
@@ -282,23 +336,60 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
     const showPlanes = state.panels.has("planes");
     const showDimensions = state.panels.has("dimensions");
 
-    const rightX = showDialogue ? DIALOGUE_W + GAP : 0;
+    const legend = showPlanes || showDimensions;
+
+    // The right column: planes, charts over turns, and the legend under them.
+    // Everything but the charts has a height fixed by the column's width.
+    function rightFixedHeight(rightW) {
+      const planesH = showPlanes ? planesHeight(rightW) : 0;
+      const legendH = legend ? GAP + legendHeight(rightW) : 0;
+      return planesH + (showPlanes && showDimensions ? GAP : 0) + (showDimensions ? PANEL_HEAD_H : 0) + legendH;
+    }
+
+    // A wider dialogue is shorter and leaves the planes less room; a
+    // narrower one is taller. The share closest to the preferred one at which
+    // the charts, stretched to end level with the dialogue, keep a height
+    // between DIMENSIONS_H and DIMENSIONS_MAX_H is taken, so both columns end
+    // on one line. Without such a share the dialogue keeps the preferred
+    // width and the taller column sets the height.
+    if (showDialogue) {
+      const shares = [];
+      for (let share = DIALOGUE_SHARE.min; share <= DIALOGUE_SHARE.max + 1e-9; share += DIALOGUE_SHARE.step) {
+        shares.push(share);
+      }
+      shares.sort(function (a, b) {
+        return Math.abs(a - DIALOGUE_SHARE.preferred) - Math.abs(b - DIALOGUE_SHARE.preferred);
+      });
+      const fits = shares.find(function (share) {
+        dialogueW = Math.round(W * share);
+        const chartsH = dialogueHeight() - rightFixedHeight(W - dialogueW - GAP);
+        return showDimensions && chartsH >= DIMENSIONS_H && chartsH <= DIMENSIONS_MAX_H;
+      });
+      dialogueW = Math.round(W * (fits === undefined ? DIALOGUE_SHARE.preferred : fits));
+    }
+
+    const rightX = showDialogue ? dialogueW + GAP : 0;
     const rightW = W - rightX;
     const planesH = showPlanes ? planesHeight(rightW) : 0;
-
-    let height = planesH + (showDimensions ? DIMENSIONS_H : 0) + (showPlanes && showDimensions ? GAP : 0);
+    const legendH = legend ? GAP + legendHeight(rightW) : 0;
+    const fixedH = rightFixedHeight(rightW);
+    let height = fixedH + (showDimensions ? DIMENSIONS_H : 0);
     if (showDialogue) { height = Math.max(height, dialogueHeight()); }
 
     const boxes = {};
-    if (showDialogue) { boxes.dialogue = { x: 0, y: 0, w: DIALOGUE_W, h: height }; }
+    if (showDialogue) { boxes.dialogue = { x: 0, y: 0, w: dialogueW, h: height }; }
     let y = 0;
-    if (showPlanes) { boxes.planes = { x: rightX, y: y, w: rightW, h: planesH }; y += planesH + GAP; }
-    // Spare height, when the dialogue is the tallest column, goes to the charts.
-    if (showDimensions) { boxes.dimensions = { x: rightX, y: y, w: rightW, h: Math.max(DIMENSIONS_H, height - y) }; }
+    if (showPlanes) { boxes.planes = { x: rightX, y: y, w: rightW, h: planesH }; y += planesH + (showDimensions ? GAP : 0); }
+    if (showDimensions) {
+      // Spare height, when the dialogue is the tallest column, goes to the
+      // charts, so both columns end on one line.
+      const chartsH = Math.max(DIMENSIONS_H, height - fixedH);
+      boxes.dimensions = { x: rightX, y: y, w: rightW, h: PANEL_HEAD_H + chartsH };
+      y += PANEL_HEAD_H + chartsH;
+    }
+    if (legend) { boxes.legend = { x: rightX, y: y + GAP, w: rightW, h: legendH - GAP }; }
 
-    const legend = showPlanes || showDimensions;
-    const legendH = LEGEND_H + (legendRows().length - 1) * LEGEND_ROW;
-    return { boxes: boxes, height: height + (legend ? legendH : 0), legendY: height, legend: legend };
+    return { boxes: boxes, height: height };
   }
 
   // ---------- panels ----------
@@ -307,7 +398,7 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
 
   function cardLines(entry) {
     const content = DATA.texts[String(entry.turn)];
-    return content ? wrap(content, SIZE.body, DIALOGUE_W * CARD.width - 2 * CARD.padding) : [];
+    return content ? wrap(content, SIZE.body, dialogueW * CARD.width - 2 * CARD.padding) : [];
   }
 
   function cardHeight(entry) {
@@ -316,12 +407,12 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
 
   function drawDialogue(svg, box) {
     const group = node("g", {}, svg);
-    text(group, box.x, box.y + 22, "Dialogue", { "font-size": SIZE.title, "font-weight": 700, fill: P.text });
+    panelHead(group, box, "Dialogue");
 
     const padding = CARD.padding;
     const cardW = box.w * CARD.width;
     const lineH = LINE_H;
-    const top = box.y + 44;
+    const top = box.y + PANEL_HEAD_H;
     const bottom = box.y + box.h;
     const gap = CARD.gap;
 
@@ -359,7 +450,13 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
         fill: current ? color : P.panel, "fill-opacity": current ? 0.08 : 1,
         stroke: color, "stroke-width": current ? 2.5 : 1.5,
       }, group);
-      text(group, x + padding, y + padding + 17, card.entry.turn + "  " + agentName(role), {
+      // Only the name, the part of the label before the first comma or
+      // bracket: what steers the agent is said once, in the legend.
+      const header = fit([
+        card.entry.turn + "  Agent " + role + ": " + shortName(role),
+        card.entry.turn + "  Agent " + role,
+      ], SIZE.small, cardW - 2 * padding, "700");
+      text(group, x + padding, y + padding + 17, header, {
         "font-size": SIZE.small, "font-weight": 700, fill: color,
       });
       if (card.lines.length) {
@@ -375,23 +472,26 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
     }
   }
 
-  function drawPlanes(svg, box) {
+  function drawPlanes(svg, outer) {
     const group = node("g", {}, svg);
+    const box = panelHead(group, outer, "State spaces");
     const lane = LANE_W;
     const blockW = (box.w - lane) / 2;
-    const plotTop = box.y + 70;
+    const plotTop = box.y + planeHeaderHeight(box.w);
     const size = planeSize(box.w);
     const frames = {};
 
     roles.forEach(function (role, index) {
       const x0 = box.x + index * (blockW + lane);
       const space = DATA.agents[role].stateSpace;
-      text(group, x0, box.y + 22, fit([agentName(role), "Agent " + role], SIZE.title, blockW, "700"), {
+      text(group, x0, box.y + 22, fit([
+        "Agent " + role + ": " + shortName(role), "Agent " + role,
+      ], SIZE.title, blockW, "700"), {
         "font-size": SIZE.title, "font-weight": 700, fill: agentColor(role),
       });
-      text(group, x0, box.y + 50, fit([
-        space.caption + " (" + space.abbreviation + ")", space.abbreviation + " space",
-      ], SIZE.body, blockW), { fill: P.muted });
+      planeSubtitle(role, box.w).forEach(function (line, index) {
+        text(group, x0, box.y + 50 + index * LINE_H, line, { fill: P.muted });
+      });
       frames[role] = drawPlane(group, space, { x: x0 + 56, y: plotTop, size: size });
     });
 
@@ -412,7 +512,9 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
       "marker-end": "url(#arrow-" + entry.role + ")",
     }, group);
 
-    // The lane names the conversion in both directions.
+    // The lane names the conversion in both directions, on a halo, because
+    // the arrow above may cross it.
+    const halo = { stroke: P.panel, "stroke-width": 8, "stroke-linejoin": "round", "paint-order": "stroke" };
     const laneX = box.x + blockW + lane / 2;
     const laneY = plotTop + size / 2;
     roles.forEach(function (role, index) {
@@ -424,10 +526,10 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
       const arrow = index === 0 ? "→" : "←";
       const active = entry.role === role;
       text(group, laneX, y, fromSpace.abbreviation + " " + arrow + " " + toSpace.abbreviation, {
-        "text-anchor": "middle", "font-weight": 700, fill: active ? agentColor(role) : P.muted,
+        "text-anchor": "middle", "font-weight": 700, fill: active ? agentColor(role) : P.muted, ...halo,
       });
     });
-    text(group, laneX, laneY + 8, "converted", { "text-anchor": "middle", "font-size": SIZE.small, fill: P.muted });
+    text(group, laneX, laneY + 8, "converted", { "text-anchor": "middle", "font-size": SIZE.small, fill: P.muted, ...halo });
 
     // Behaviors, oldest first, so the newest lie on top.
     roles.forEach(function (role) {
@@ -466,7 +568,13 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
       text(group, cx, cy - r - 12, "90°", { "font-size": SIZE.small, fill: P.muted, "text-anchor": "middle" });
       text(group, cx - r - 12, cy + 7, "180°", { "font-size": SIZE.small, fill: P.muted, "text-anchor": "end" });
       text(group, cx, cy + r + 26, "270°", { "font-size": SIZE.small, fill: P.muted, "text-anchor": "middle" });
-      text(group, cx, frame.y + s + 34, "θ from communion toward agency, R from center", {
+      // Centred under the circle, so it may use twice the room to its right.
+      const caption = fit([
+        "θ from communion toward agency, R from center",
+        "θ from communion, R from center",
+        "θ, R from center",
+      ], SIZE.small, 2 * (W - cx) - 8);
+      text(group, cx, frame.y + s + 34, caption, {
         "font-size": SIZE.small, fill: P.muted, "text-anchor": "middle",
       });
     } else {
@@ -579,31 +687,24 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
     });
   }
 
-  function drawDimensions(svg, box) {
+  function drawDimensions(svg, outer) {
     const group = node("g", {}, svg);
     const space = spaceById(state.timeSpace);
+    const box = panelHead(group, outer, "Trajectories over turns");
     const owner = roles.find(function (role) { return DATA.agents[role].stateSpace.id === space.id; });
     const count = space.dimensions.length;
     const chartGap = 40;
     const chartW = (box.w - chartGap * (count - 1)) / count;
 
-    // One wording for every chart title: the longest that fits all of them.
-    const wordings = [
-      function (name) { return name + " over turns, " + space.abbreviation + " space"; },
-      function (name) { return name + ", " + space.abbreviation + " space"; },
-      function (name) { return name; },
-    ];
+    // The panel head names the space, so a chart title names its dimension.
     const names = space.dimensions.map(function (d) { return d.caption + " (" + d.key + ")"; });
-    const wording = wordings.find(function (w) {
-      return names.every(function (name) { return measure(w(name), SIZE.title, "700") <= chartW; });
-    }) || wordings[wordings.length - 1];
 
     space.dimensions.forEach(function (dimension, index) {
       const x0 = box.x + index * (chartW + chartGap);
       const plot = { x: x0 + 56, y: box.y + 44, w: chartW - 66, h: box.h - 44 - 56 };
       const caption = dimension.caption.toLowerCase();
       const titleColor = caption === "agency" ? P.agency : caption === "communion" ? P.communion : P.text;
-      text(group, x0, box.y + 22, wording(names[index]), { "font-size": SIZE.title, "font-weight": 700, fill: titleColor });
+      text(group, x0, box.y + 22, names[index], { "font-size": SIZE.title, "font-weight": 700, fill: titleColor });
 
       const pad = space.type === "discrete" ? 0.5 : 0;
       const yMin = dimension.minimum - pad;
@@ -663,48 +764,57 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
 
   // Legend entries: a key drawn in 30 units, then its label. Entries flow
   // into a second row when one row is not wide enough.
-  function legendItems() {
-    const items = roles.map(function (role) {
-      return {
-        label: agentName(role),
-        key: function (group, x, y) {
-          node("line", { x1: x, y1: y, x2: x + 30, y2: y, stroke: agentColor(role), "stroke-width": 3 }, group);
-        },
-      };
-    });
-    items.push({
-      label: "sent, own state space",
-      key: function (group, x, y) { node("circle", { cx: x + 15, cy: y, r: 8, fill: P.muted }, group); },
-    });
-    items.push({
-      label: "received, converted into this space",
-      key: function (group, x, y) {
-        node("circle", { cx: x + 15, cy: y, r: 8, fill: P.panel, stroke: P.muted, "stroke-width": 2.5 }, group);
-      },
-    });
-    return items;
+  // The legend sits under the charts: one row per agent, its full label
+  // wrapped to the column, then the two marker kinds side by side.
+  function legendAgentLines(role, width) {
+    return wrap(agentName(role), SIZE.small, width - LEGEND_KEY);
   }
 
-  function legendRows() {
+  const MARKERS = [
+    { label: "sent, in the agent's own state space", filled: true },
+    { label: "received, converted into this space", filled: false },
+  ];
+
+  // The marker kinds side by side where they fit, else one per row.
+  function markerRows(width) {
     const rows = [[]];
     let x = 0;
-    legendItems().forEach(function (item) {
-      const width = 40 + measure(item.label, SIZE.small) + 34;
-      if (x > 0 && x + width - 34 > W) { rows.push([]); x = 0; }
-      rows[rows.length - 1].push({ item: item, x: x });
-      x += width;
+    MARKERS.forEach(function (marker) {
+      const itemW = LEGEND_KEY + measure(marker.label, SIZE.small);
+      if (x > 0 && x + itemW > width) { rows.push([]); x = 0; }
+      rows[rows.length - 1].push({ marker: marker, x: x });
+      x += itemW + 40;
     });
     return rows;
   }
 
-  function drawLegend(svg, y) {
+  function legendHeight(width) {
+    let rows = markerRows(width).length;
+    roles.forEach(function (role) { rows += legendAgentLines(role, width).length; });
+    return PANEL_HEAD_H + rows * LEGEND_ROW + 8;
+  }
+
+  function drawLegend(svg, outer) {
     const group = node("g", {}, svg);
-    legendRows().forEach(function (row, index) {
-      const baseline = y + 32 + index * LEGEND_ROW;
-      row.forEach(function (entry) {
-        entry.item.key(group, entry.x, baseline - 7);
-        text(group, entry.x + 40, baseline, entry.item.label, { "font-size": SIZE.small, fill: P.body });
+    const box = panelHead(group, outer, "Legend");
+    let baseline = box.y + 24;
+    roles.forEach(function (role) {
+      node("line", { x1: box.x, y1: baseline - 8, x2: box.x + 30, y2: baseline - 8, stroke: agentColor(role), "stroke-width": 4 }, group);
+      legendAgentLines(role, box.w).forEach(function (line, index) {
+        text(group, box.x + LEGEND_KEY, baseline + index * LEGEND_ROW, line, { "font-size": SIZE.small, fill: P.text });
       });
+      baseline += legendAgentLines(role, box.w).length * LEGEND_ROW;
+    });
+    markerRows(box.w).forEach(function (row) {
+      row.forEach(function (entry) {
+        const x = box.x + entry.x;
+        node("circle", {
+          cx: x + 15, cy: baseline - 8, r: 9,
+          fill: entry.marker.filled ? P.muted : P.panel, stroke: P.muted, "stroke-width": entry.marker.filled ? 0 : 2.5,
+        }, group);
+        text(group, x + LEGEND_KEY, baseline, entry.marker.label, { "font-size": SIZE.small, fill: P.text });
+      });
+      baseline += LEGEND_ROW;
     });
   }
 
@@ -714,6 +824,7 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
 
   function draw() {
     const plan = layout();
+    panelCount = 0;
     while (svg.firstChild) { svg.removeChild(svg.firstChild); }
     svg.setAttribute("viewBox", "0 0 " + W + " " + Math.max(plan.height, 1));
     svg.setAttribute("font-family", FONT);
@@ -730,7 +841,7 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
     if (plan.boxes.dialogue) { drawDialogue(svg, plan.boxes.dialogue); }
     if (plan.boxes.planes) { drawPlanes(svg, plan.boxes.planes); }
     if (plan.boxes.dimensions) { drawDimensions(svg, plan.boxes.dimensions); }
-    if (plan.legend) { drawLegend(svg, plan.legendY); }
+    if (plan.boxes.legend) { drawLegend(svg, plan.boxes.legend); }
 
     describeTurn();
   }
@@ -835,7 +946,8 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
   document.getElementById("title").textContent = DATA.title;
   document.getElementById("lede-agents").textContent = roles.map(function (role) {
     const agent = DATA.agents[role];
-    return agentName(role) + " (" + (agent.type === "human" ? "human" : "formal model") + ", " + agent.stateSpace.caption + ")";
+    return agentName(role) + " (" + (agent.type === "human" ? "human" : "formal model") + ", " + agent.stateSpace.caption +
+      (agent.parameters ? "; " + describeParameters(agent.parameters) : "") + ")";
   }).join("; ") + ".";
   document.getElementById("lede-record").innerHTML = escape(lastTurn + " turns") +
     (DATA.context ? ", context <code>" + escape(DATA.context) + "</code>" : "") +

@@ -17,6 +17,7 @@ Run
     python -m src.run_interaction_report --latest
     python -m src.run_interaction_report results/<folder> --text dialogue.csv \\
         --label A="IPC model" --label B="LASSI model" --out report.html
+    python -m src.run_interaction_report results/<folder> --print-width landscape
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ import argparse
 from pathlib import Path
 
 from src.visualization.InteractionRecord import InteractionRecord
-from src.visualization.InteractionReport import PANELS, InteractionReport
+from src.visualization.InteractionReport import PANELS, PRINT_WIDTHS, InteractionReport
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REPORT_NAME = "interaction_report.html"
@@ -129,6 +130,12 @@ def main() -> None:
     parser.add_argument("--turn", type=int, help="turn shown when the page opens, the last by default")
     parser.add_argument("--time-space", help="state space drawn over turns, ac if an agent speaks it")
     parser.add_argument("--title", default="", help="heading of the page")
+    parser.add_argument(
+        "--print-width",
+        default="portrait",
+        help=f"print width of the figure: portrait ({PRINT_WIDTHS['portrait']} in), "
+        f"landscape ({PRINT_WIDTHS['landscape']} in), or inches",
+    )
     parser.add_argument("--out", type=Path, help=f"output file, {REPORT_NAME} in the results folder by default")
     arguments = parser.parse_args()
 
@@ -145,6 +152,7 @@ def main() -> None:
         initial_turn=arguments.turn,
         time_space=arguments.time_space,
         labels=parse_labels(arguments.label),
+        print_width=PRINT_WIDTHS.get(arguments.print_width) or float(arguments.print_width),
     )
     path = report.write(arguments.out or folder / REPORT_NAME)
 

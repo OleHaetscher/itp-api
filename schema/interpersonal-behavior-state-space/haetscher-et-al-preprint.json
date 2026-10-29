@@ -4,7 +4,7 @@
   "version": "0.2.0",
   "stateSpaces": [
     {
-      "caption": "Discrete agency-communion box",
+      "caption": "Discrete agency-communion Cartesian space",
       "abbreviation": "AC",
       "description": "Box-shaped discrete interpersonal state space used to represent agent behavior along the two IPC dimensions agency and communion.",
       "type": "discrete",

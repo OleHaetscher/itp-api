@@ -119,6 +119,9 @@ class InteractionRecord:
                 "model": model["name"] if model else None,
                 "modelId": model["id"] if model else None,
                 "stateSpace": describe_state_space(agent["stateSpace"]),
+                # Present only for a model that lets agents differ in its
+                # parameters, and only in records written since it could.
+                "parameters": agent.get("parameters"),
             }
 
         return agents

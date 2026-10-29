@@ -1,8 +1,8 @@
 """
 Tests of the interaction report: reading a recorded interaction, pairing each
 behavior with its converted copy, joining a dialogue file on turn and role,
-and writing the self-contained page. The example record in
-examples/interaction-report/ is one fixture; the others are recorded
+and writing the self-contained page. The two records of the PerTRAIN dialog
+in examples/interaction-report/ are fixtures; the others are recorded
 in-process through FastAPI's test client, so no port is involved.
 """
 
@@ -23,6 +23,7 @@ from src.visualization.InteractionReport import DATA_PLACEHOLDER, InteractionRep
 
 EXAMPLE = Path(__file__).resolve().parent.parent / "examples" / "interaction-report"
 EXAMPLE_RECORD = next((EXAMPLE / "record").iterdir())
+EXAMPLE_LASSI_RECORD = next((EXAMPLE / "lassi_record").iterdir())
 
 
 def record_interaction(
@@ -87,8 +88,11 @@ def test_example_record_pairs_each_behavior_with_its_conversion() -> None:
 
     assert [entry["turn"] for entry in record.turns] == list(range(1, 9))
     assert [entry["role"] for entry in record.turns] == ["A", "B"] * 4
-    assert record.agents["A"]["stateSpace"]["id"] == "ipc"
-    assert record.agents["B"]["stateSpace"]["id"] == "ac"
+    # A PerTRAIN record: Daniel's assessed text as human agent A in ac, the
+    # dummy IPC model that steers Lukas as B.
+    assert record.agents["A"]["type"] == "human"
+    assert record.agents["A"]["stateSpace"]["id"] == "ac"
+    assert record.agents["B"]["stateSpace"]["id"] == "ipc"
 
     for entry in record.turns:
         sender = record.agents[entry["role"]]["stateSpace"]["id"]
@@ -96,6 +100,14 @@ def test_example_record_pairs_each_behavior_with_its_conversion() -> None:
         assert entry["sent"]["stateSpace"] == sender
         assert entry["received"]["stateSpace"] == receiver
         assert entry["received"]["converter"] in ("IPCToACConverter", "ACToIPCConverter")
+
+
+def test_example_lassi_record_carries_the_template_parameters() -> None:
+    record = InteractionRecord.from_folder(EXAMPLE_LASSI_RECORD)
+
+    assert record.agents["B"]["modelId"] == "lassi"
+    assert record.agents["B"]["parameters"]["values"] == {"A": {"BD": 5.5, "IR": -0.6}, "C": {"BD": 3.0, "IR": 0.7}}
+    assert all(entry["received"] == entry["sent"] for entry in record.turns)
 
 
 def test_same_space_turns_are_received_as_sent(tmp_path: Path) -> None:
@@ -154,7 +166,7 @@ def test_planes_put_communion_right_and_agency_up() -> None:
 def test_report_embeds_the_record_and_nothing_else(tmp_path: Path) -> None:
     record = InteractionRecord.from_folder(EXAMPLE_RECORD)
     record.attach_texts(write_csv(tmp_path / "d.csv", [(1, "A", "A </script> inside.")]))
-    report = InteractionReport(record=record, labels={"A": "IPC model"})
+    report = InteractionReport(record=record, labels={"A": "Daniel Becker"})
 
     html = report.render()
 
@@ -166,11 +178,12 @@ def test_report_embeds_the_record_and_nothing_else(tmp_path: Path) -> None:
 
     start = html.index("const DATA = ") + len("const DATA = ")
     data = json.loads(html[start:html.index("\n", start)].rstrip(";").replace("<\\/", "</"))
-    assert data["agents"]["A"]["label"] == "IPC model"
-    assert data["agents"]["B"]["label"] == "LASSI agency-communion model"
+    assert data["agents"]["A"]["label"] == "Daniel Becker"
+    assert data["agents"]["B"]["label"] == "Dummy interpersonal circumplex model"
     assert data["timeSpace"] == "ac"
     assert data["initialTurn"] == 8
     assert len(data["turns"]) == 8
+    assert data["printWidth"] == 6.2
 
 
 @pytest.mark.parametrize(
@@ -180,6 +193,7 @@ def test_report_embeds_the_record_and_nothing_else(tmp_path: Path) -> None:
         ({"time_space": "sasb"}, "No agent speaks sasb"),
         ({"initial_turn": 9}, "turns 1 to 8"),
         ({"labels": {"C": "Third"}}, "role C"),
+        ({"print_width": 30.0}, "not a page"),
     ],
 )
 def test_report_refuses_options_the_record_cannot_meet(options: dict, message: str) -> None:

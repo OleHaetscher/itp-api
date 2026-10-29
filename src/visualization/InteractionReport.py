@@ -13,6 +13,10 @@ DATA_PLACEHOLDER = "/*__ITP_REPORT_DATA__*/null"
 # Panels the report can draw, in the order they are laid out.
 PANELS = ("dialogue", "planes", "dimensions")
 
+# Print widths in inches: a portrait page and a landscape page with 1 in
+# margins. The figure is laid out for the width it is printed at.
+PRINT_WIDTHS = {"portrait": 6.2, "landscape": 9.0}
+
 
 class InteractionReport:
     """
@@ -42,6 +46,7 @@ class InteractionReport:
         initial_turn: int | None = None,
         time_space: str | None = None,
         labels: dict[str, str] | None = None,
+        print_width: float = PRINT_WIDTHS["portrait"],
     ) -> None:
         """
         Prepare a report of one interaction.
@@ -57,6 +62,9 @@ class InteractionReport:
             labels: Optional names of the agents by role, such as
                 {"A": "IPC model"}; the model name, or "Human participant",
                 otherwise.
+            print_width: Width the figure is printed at, in inches; 6.2 for
+                a portrait page, 9 for a landscape one. Font sizes stay the
+                same in print, so a wider figure holds more per line.
 
         Returns:
         """
@@ -78,7 +86,11 @@ class InteractionReport:
         if initial_turn is not None and not 1 <= initial_turn <= last_turn:
             raise ValueError(f"The record has turns 1 to {last_turn}, not {initial_turn}.")
 
+        if not 4.0 <= print_width <= 12.0:
+            raise ValueError(f"A print width of {print_width} in is not a page; use 4 to 12.")
+
         self.record = record
+        self.print_width = print_width
         self.panels = tuple(panel for panel in PANELS if panel in panels)
         self.title = title or "ITP interaction report"
         self.initial_turn = initial_turn or last_turn
@@ -141,6 +153,7 @@ class InteractionReport:
                 "panels": list(self.panels),
                 "initialTurn": self.initial_turn,
                 "timeSpace": self.time_space,
+                "printWidth": self.print_width,
                 "palette": self.palette(),
             }
         )
