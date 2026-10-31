@@ -97,8 +97,7 @@ itp/
 ├── docs/
 │   ├── ITP_API_Specification.pdf
 │   ├── api_design.md
-│   ├── client_split.md
-│   └── img.png
+│   └── client_split.md
 │
 ├── itp-api-flow.html
 ├── itp-communication-flow.html
@@ -124,11 +123,13 @@ itp/
 │   └── index.html
 │
 ├── examples/
-│   └── itp-api-basic-web-client/   PHP web client of the deployed API, own README
+│   ├── itp-api-basic-web-client/   PHP web client of the deployed API, own README
+│   └── interaction-report/         the PerTRAIN run behind Figure 2, its report, pertrain_dialogue.py, own README
 │
 ├── src/
 │   ├── ITPSpecification.py
 │   ├── run_API_interaction.py
+│   ├── run_interaction_report.py
 │   ├── run_lassi_visualization.py
 │   ├── run_local_interaction.py
 │   ├── run_mock_ui.py
@@ -161,7 +162,8 @@ itp/
 │   ├── formalmodels/
 │   │   ├── BaseFormalModel.py
 │   │   ├── DummyFormalModels.py
-│   │   └── LASSIFormalModel.py
+│   │   ├── LASSIFormalModel.py
+│   │   └── ParameterSpace.py      parameters an interaction may choose per agent
 │   │
 │   ├── interactioncontext/
 │   │   └── InteractionContext.py
@@ -173,14 +175,20 @@ itp/
 │   └── visualization/
 │       ├── BaseVisualizer.py
 │       ├── FormalModelVisualizer.py
+│       ├── InteractionRecord.py
+│       ├── InteractionReport.py
 │       ├── InteractionVisualizer.py
-│       └── LASSIFormalModelVisualizer.py
+│       ├── LASSIFormalModelVisualizer.py
+│       └── templates/
+│           └── interaction_report.html
 │
 ├── tests/
 │   ├── data/
 │   │   └── lassi_test_vectors.json
 │   ├── test_api_interactions.py
+│   ├── test_interaction_report.py
 │   ├── test_lassi_formal_model.py
+│   ├── test_model_parameters.py
 │   └── test_ports.py
 │
 └── conftest.py
@@ -261,6 +269,11 @@ Two things this repository decides for itself:
 - **Diagnostics.** `step_record()` per axis and `step_records()` per model expose every
   intermediate of the last update, under the field names the conformance vectors use, which is
   what the dashboard and the test both consume.
+- **Parameters per agent.** `lassi_parameter_space()` publishes `BD` (strictly inside 1 to 7)
+  and `IR` (−1 to +1) per axis, with the values in `configs/formal_model_parameters.yaml` as
+  defaults; `tau`, `lambda_relax`, the axis signs and the number of states stay as configured.
+  `lassi_parameters_with` merges the values an agent chose into that configuration. See *Model
+  parameters* under `API`.
 
 ### `visualization`
 
@@ -280,12 +293,19 @@ repository. Two colours are reserved and should not be spent on anything else:
 | Communion | `#B84650` | muted red-pink |
 
 They are the agreed pair for agency-communion figures — a different hue each, agency deliberately
-the darker of the two, both used as solid areas (`docs/img.png`). In the dashboards they mark the
+the darker of the two, both used as solid areas. In the dashboards they mark the
 axis itself: whatever state the agent is in *now* is drawn in the colour of its axis, so a figure
 reads as agency or as communion without the caption having to say so. `FormalModelVisualizer` renders a single formal model without
 interaction data, `InteractionVisualizer` renders a sequence of ITP messages as a trajectory
 (not implemented yet), and `LASSIFormalModelVisualizer` is the interactive walk-through of one
 LASSI update step.
+
+The interaction report is not a Dash dashboard, because it has to leave the machine as one file.
+`InteractionRecord` reads a results folder and pairs each behavior as sent with its converted
+copy; `InteractionReport` writes it into `templates/interaction_report.html`, a self-contained
+page that draws the figure as SVG. It takes its colours from `BaseVisualizer`. The two agents are
+blue and amber, because the agency and communion colours stay reserved for the axes. See
+*Interaction Report and Paper Figures* below.
 
 ### `API`
 
@@ -316,6 +336,34 @@ state space, and hands clients bare `experience` and `behavior` vectors. Inside,
 every behavior is still wrapped into a full ITP message and stored in a
 `Communication`, so an API-driven interaction produces the same record as a
 local one; `/results` returns both.
+
+#### Model parameters
+
+A model that lets its agents differ publishes a `parameterSpace` in `GET /models/{modelId}`: each
+parameter with its group, range, whether the bounds are excluded, and its default, plus the
+parameters every agent runs with (`fixed`). Today that is `lassi` (BD and IR per axis); the dummy
+models publish none. A model agent chooses its values through `agents.X.configuration`, which the
+specification already defines as model-specific:
+
+```json
+"B": {"type": "model", "configuration": {
+  "parameterSelection": "random", "randomSeed": 7,
+  "parameters": {"A": {"IR": -0.4}}
+}}
+```
+
+`parameterSelection` is `default` (the configured values) or `random`, a uniform draw from the
+published ranges, rounded to two decimals; a draw without `randomSeed` gets a seed from the server.
+Values under `parameters` take precedence over either. Anything outside the space is a `422`:
+an unknown key or parameter, a value out of range, a seed without a draw, or a configuration for a
+human agent or for a model without a `parameterSpace`. `ParameterSpace` in `src/formalmodels/`
+does the resolving and `ModelEntry.resolve_configuration` applies it, so a new model only declares
+its space and accepts `parameters` in its factory.
+
+Every model agent with a parameter space reports what it runs with, in the creation, status and
+results responses and in `interaction.json`: `parameters` holds the `selection`, the `randomSeed`,
+the parameters set `explicit`ly, and the `values`. A random draw can therefore be repeated and
+reported.
 
 Each model exposes one shared `stateSpaceSchema`, compiled by
 `StateSpaceSchema` from the IBSSS descriptions in
@@ -531,7 +579,10 @@ whole workflow:
    runs, from the available ones, and show *You* or *Second participant* where a human sits.
    With two participants, a third field picks the model the interaction is bound to, which
    neither of you runs: the API requires one, and it sets the default state space and the turn
-   limits.
+   limits. A model agent whose model publishes a `parameterSpace` gets a box below: the model's
+   defaults, a random draw (with an optional seed; without one the server picks it and reports
+   it), or values set by hand, one field per parameter with its range. The values the agent
+   runs with are shown under the interaction once it is created.
 3. **Create** — `POST /interactions`, then `POST .../register` for your agent. With two humans
    the six-digit invitation code appears; open the page in a second tab and redeem it in the
    *Join with a code* panel. With two models the server plays both and the page goes straight
@@ -571,7 +622,8 @@ results/20260914_155820_9aa18034/
 The message files are the same ones a local interaction produces, `_converted` copies included
 whenever the two agents work in different state spaces. `interaction.json` holds what only the
 API knows: which agent was human and which was a model, which model each ran, the state space
-each worked in, and how and when the interaction ended.
+each worked in, the parameters each model agent ran with, the client's `clientRequestId`, and
+how and when the interaction ended.
 
 The folder and `interaction.json` are written when the interaction is created, each message as
 it arrives, and `interaction.json` again when the interaction starts and when it ends. An
@@ -581,6 +633,77 @@ point. With persistence off, nothing is written.
 This is a property of the API process, not of the page: `src/run_model_api.py` passes the
 repository root as `results_root`, and an `APISpecification` built without one writes nothing to
 disk. See `docs/api_design.md` under *Persistence*.
+
+## Interaction Report and Paper Figures
+
+The two figures of the ITP paper are produced here, so that each one is also something a user of
+the repository can open.
+
+**Figure 1**, the workflow on the platform, is section 00 of `itp-api-flow.html`. The page has
+*Download SVG* and *Download PNG* buttons under the figure; the PNG is 3720 px wide, which is
+600 dpi at 6.2 in. The figure is plain SVG with its colours and fonts written out, so the export
+looks the same in Word as in the browser.
+
+**Figure 2** is one frame of an interaction report. The report is written from a results folder
+alone, the record the API keeps for an interaction with persistence enabled:
+
+```bash
+python -m src.run_interaction_report results/<folder>
+python -m src.run_interaction_report --latest
+```
+
+It writes `interaction_report.html` into the folder (or where `--out` says): one file with no
+dependencies that opens from disk. A slider steps through the interaction turn by turn, and
+checkboxes choose the panels:
+
+- **Dialogue.** The text of each turn, if a dialogue file is attached.
+- **State spaces.** One plane per agent in its own state space: filled markers for what the
+  agent sent, hollow markers for the partner's behavior as the converter delivered it. A
+  dotted arrow carries the selected turn from where it was sent to where it arrived. Both
+  planes put communion to the right and agency up, the orientation of the circumplex, so an
+  `ac` box and the `ipc` circle can be compared directly.
+- **Over turns.** Each dimension of one state space against the turn, both agents, the
+  converted series dashed. An angle is not drawn across 0/360 and is left out where `R = 0`.
+
+*Download SVG* and *Download PNG* export the figure at the selected turn, so the printed figure is
+a frame of the report and the report can go out as the supplement.
+
+Text from a paradigm is not on the platform; for PerTRAIN it stays in PerTRAIN. Supply it as a
+CSV with the columns `turn`, `role` and `text`, where `turn` is the API turn (one message each:
+A acts in 1, B in 2) and `role` the agent that acted in it. A row that names a turn the record
+does not have, or the wrong agent for it, is refused rather than shown beside the wrong numbers:
+
+```bash
+python -m src.run_interaction_report results/<folder> --text dialogue.csv \
+    --text-source "PerTRAIN chat export" --label A="IPC model" --label B="LASSI model"
+```
+
+`--panels`, `--turn` and `--time-space` set what the page shows when it opens, and `--title` its
+heading. `--print-width` sets the width the figure is printed at: `portrait` (6.2 in, the
+default), `landscape` (9 in, a landscape page with 1 in margins), or a number of inches. Type
+sizes stay the same in print, so a wider figure holds more text per line; the PNG is always
+600 dpi at that width. The header names the parameters each model agent ran with, when the record has them.
+`examples/interaction-report/` holds the run behind Figure 2: a conflict in a bar between two
+PerTRAIN agents, Daniel steered by LASSI (A: BD 5.5, IR −0.6; C: BD 3, IR 0.7) and Lukas by the
+dummy IPC model, eight messages generated by gpt-4.1 on a local PerTRAIN stack against a local ITP
+server. The figure is Lukas's record at turn 8, in landscape; Daniel's LASSI record of the same
+dialog sits beside it.
+
+**Text from a PerTRAIN dialog.** PerTRAIN's `ITPGenerator` opens one ITP interaction per agent and
+dialog: the agent's partner as human agent A in `ac` (its messages, as PerTRAIN's assessor rated
+them), the hosted model that steers the agent as B. Its `clientRequestId` is the PerTRAIN session,
+and the record keeps it. `examples/interaction-report/pertrain_dialogue.py` reads the messages of
+that session from a local PerTRAIN stack and writes the dialogue file: A's k-th turn is the k-th
+partner message, B's k-th turn the agent's own message that follows it. A record whose turns do
+not match the messages is refused.
+
+```bash
+python examples/interaction-report/pertrain_dialogue.py results/<folder> --out dialogue.csv
+```
+
+Each such record holds one model only. A dialog between two PerTRAIN agents steered by two
+models (say LASSI and the dummy IPC model) leaves two records, and the report of either shows the
+partner as the assessed text, not as the other model's state.
 
 ## Example Web Client
 
@@ -634,6 +757,16 @@ release blocker, not a rounding question.
 interaction, a pair without a converter refused, ending early with the record kept, the record
 written at creation, and the `404` a client gets after a restart.
 
+`tests/test_model_parameters.py` covers the parameters a model agent chooses: the published LASSI
+space, the defaults without a configuration, a seeded draw that repeats and reaches the model, the
+seed reported for an unseeded draw, explicit values over a draw, the refusals, and the parameters
+and `clientRequestId` in the record.
+
+`tests/test_interaction_report.py` covers the report: each behavior paired with its converted
+copy (or received as sent when both agents share a space), a dialogue file joined on turn and
+role and refused when it does not fit, communion to the right and agency up in both kinds of
+plane, a page that embeds the record and fetches nothing, and the runner on the newest folder.
+
 `tests/test_ports.py` covers the port policy in `src/utils/ports.py`: an explicit port is obeyed
 or refused, never silently replaced; held candidates are skipped, also when the holder listens on
 another address than the one asked about (`0.0.0.0` against `127.0.0.1`, or `::1`), which a bind
@@ -656,6 +789,9 @@ Implemented:
   codes, perception polling, idempotent action submission, problem+json errors
 - two different formal models in one interaction, and the model of each agent
   in every interaction response
+- model parameters per agent (`agents.X.configuration`): defaults, a seeded random draw from the
+  model's published `parameterSpace`, or explicit values, reported with every agent and in the
+  record; LASSI publishes BD and IR per axis
 - validating state space schemas compiled from the IBSSS descriptions, with
   geometry constraints
 - API client mirroring the JavaScript client
@@ -667,6 +803,9 @@ Implemented:
 - example web client for the deployed API (`examples/itp-api-basic-web-client/`, PHP adapter
   plus plain JavaScript): LASSI against a human in `ipc`
 - conformance test of `LASSIFormalModel` against the handoff vectors of `lassi_simulations`
+- interaction report from a results folder (`src/run_interaction_report.py`): a self-contained
+  HTML page that steps through the turns, with the dialogue from a separate file, and exports
+  the figure as SVG or PNG; Figure 1 of the paper is section 00 of `itp-api-flow.html`
 
 Not yet implemented:
 
@@ -689,50 +828,61 @@ Not yet implemented:
 Roughly in the order of what blocks what. Each item names the code it touches, so none of it
 has to be re-derived later.
 
-### 1. Serve the API from the university host
+### 1. The deployed API
 
-Resources for a server at the University of Münster have been granted. Everything in `src/API/`
-currently assumes a single process on `localhost`, and four of the *Known gaps* in
-`docs/api_design.md` stop being theoretical the moment it is deployed:
+The API runs at `https://itp-api.uni-muenster.de` (interactive docs at `/docs`), reachable from the
+university network only, behind a gateway that expects an `X-API-Key`. Two GitLab projects carry
+it:
 
-- **HTTPS and the proxy.** The process serves plain HTTP and has to sit behind a terminating
-  proxy. That proxy must forward the client address: the `clientRequestId` replay scoping and
-  the join rate limiter both key on the socket address, and behind a proxy that does not forward
-  it, every client collapses into one and the rate limit becomes global.
-- **CORS.** `DEFAULT_ALLOWED_ORIGINS` in `APISpecification` is the loopback development range,
-  `localhost` and `127.0.0.1` on 5173–5182, so the mock client can move ports when one is taken.
-  The deployed origin of the JavaScript application replaces it, and it has to be decided whether
-  the mock client keeps an origin there at all. Ten loopback ports are harmless on a development
-  machine and would not be in a deployment.
+- `cvmls/itp/itp-api` mirrors this repository from GitHub (GitLab lists it as a mirror; its `main`
+  carries the GitHub merge commits). Its `.gitlab-ci.yml` builds the image and pushes it to
+  `harbor.uni-muenster.de/itp/itp-api` as `latest`; the job runs only when started by hand.
+- `cvmls/itp/itp-deployment` (Pascal's) deploys that image with `podman kube play` under systemd, behind an
+  nginx ingress, with the record in a persistent volume at `/app/results`. Its deploy pipeline is
+  also started by hand.
+
+A pushed commit is therefore live only after both pipelines have run. On 2026-10-29 the live
+server was the build of 2026-10-10: its OpenAPI document still required `turn` on every action,
+had no `cursor` in the action response and no `parameterSpace`. Check `/docs/openapi.json` before
+pointing a client at features newer than the last build.
+
+Three of the *Known gaps* in `docs/api_design.md` still apply to the deployment:
+
+- **Proxy and client address.** The `clientRequestId` replay scoping and the join rate limiter
+  key on the socket address. Behind a proxy that does not forward the client address, every
+  client collapses into one and the rate limit becomes global. Whether the ingress forwards it
+  has not been checked from this repository.
 - **Interaction lifetime.** There is no reaper. The `expired` status and the `interactionExpired`
   and `registrationTimeout` end reasons exist and nothing sets them, so a process that is up for
   weeks accumulates interactions until it restarts. It needs an expiry, a cap on concurrent
   interactions, or both.
 - **State beyond the process.** Records are written to `results/` as interactions run, but the
-  interactions themselves live in memory: a restart drops every one in flight, with its tokens
-  and invitation codes. This is accepted for now. A client asking about an interaction the server
-  no longer knows gets a `404` saying so, and starts a new one. The alternative, a store from
-  which interactions resume after a restart, is described with its costs in `docs/api_design.md`
-  under *Server restarts*; the hard part is serializing each formal model's state exactly.
+  interactions themselves live in memory: a restart, including every redeploy, drops every one
+  in flight, with its tokens and invitation codes. A client asking about an interaction the
+  server no longer knows gets a `404` saying so, and starts a new one. The alternative, a store
+  from which interactions resume after a restart, is described with its costs in
+  `docs/api_design.md` under *Server restarts*.
 
-Open: which host, whether the API and the JavaScript application share one, and how it is
-deployed — a service on the machine, a container, or the university's own platform.
+`DEFAULT_ALLOWED_ORIGINS` in `APISpecification` is still the loopback development range. The
+example web client does not need more, because its browser talks only to its PHP adapter; a
+JavaScript application calling the API from its own origin would.
 
-### 2. Mirroring between GitHub and the university GitLab
+### 2. Releasing a new API version
 
-Undecided, and worth settling before the server is set up, because whichever side is primary is
-the side the deployment pulls from. The two arrangements are not symmetric:
+GitHub is primary: work happens there, and `main` is what the GitLab mirror and the image follow.
+A release that clients depend on takes these steps, in this order:
 
-- **GitHub primary, `zivgitlab.uni-muenster.de` a push mirror.** Work stays where it is; the
-  university side is a read-only copy that a WWU-internal deployment can reach without opening
-  anything outward. Mirroring is one-way, so a hotfix committed on the GitLab side would be
-  overwritten.
-- **GitLab primary, GitHub a public mirror.** CI, deployment and the code sit on the same host,
-  which is where most PerTRAIN repositories already are, and GitHub becomes the public release
-  surface. The cost is that day-to-day work moves.
+1. Merge into `main` on GitHub, with `python -m pytest tests` passing.
+2. Wait for the mirror to pick it up in `cvmls/itp/itp-api`, then start the image build there.
+3. Start the deploy pipeline in `cvmls/itp/itp-deployment` (ask Pascal which branch; the recent
+   runs started from `dev/apikey`).
+4. Check `https://itp-api.uni-muenster.de/docs/openapi.json` for the change before telling a
+   client it is live. A redeploy drops every running interaction (see above).
 
-Whichever way it goes, it is worth writing down: who may push where, whether the mirror is
-automatic or a step in a release, and which branch the deployment follows.
+PerTRAIN's `ITPGenerator` (`personalization-backend`) depends on two releases: the one that made
+`turn` optional and returns the action `cursor` (on `main` since 2026-10-27), and, for its
+parameter fields, the one that adds `parameterSpace`. Against an older server, a `configuration`
+is accepted and silently ignored.
 
 ### 3. Interaction paradigms over the API: LASSI, movES, Direct
 
@@ -755,16 +905,18 @@ Three things follow from that, and none of them exist yet:
 - a place for a paradigm to put what it produced beside the numbers, since an utterance or a
   rendered scene is not an ITP value and should not be squeezed into one; ITP `metadata` is the
   obvious candidate and has never been used for anything load-bearing
-- `agents.X.configuration`, which the API accepts and stores but never passes to the model
-  factory — a paradigm is the first thing that would need per-agent configuration to mean
-  something
+- per-agent settings of the paradigm itself. `agents.X.configuration` now carries model
+  parameters (see *Model parameters*); a paradigm would need its own keys there, or a field of
+  its own, and `ParameterSpace.resolve` refuses keys it does not know
 
 ### 4. Already named in the code
 
 Smaller, and each one already has a marker where it belongs:
 
-- the trajectory dashboard — `InteractionVisualizer.build_body` raises `NotImplementedError`, and
-  `trajectories()` below it is the data it would draw
+- the trajectory dashboard: `InteractionVisualizer.build_body` raises `NotImplementedError`. The
+  interaction report now draws trajectories outside Dash. `trajectories()` there still collects
+  original and converted messages together, so it mixes state spaces whenever the agents differ;
+  a dashboard should read through `InteractionRecord` instead
 - analysis-unit conversion (monadic ↔ transitive), which raises today and surfaces as a `422`
 - geometry constraints inside the converters, rather than only at the API boundary
 - chained conversion (for example `ac` to `sasb` through `ipc`), so that every pair of models can

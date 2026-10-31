@@ -14,3 +14,5 @@ results/
 .pytest_cache/
 
 .itp-api-url
+
+tmp/

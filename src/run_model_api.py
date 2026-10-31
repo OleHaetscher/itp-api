@@ -26,7 +26,11 @@ from src.API.ModelCatalogue import ModelCatalogue, ModelConstraints, ModelEntry
 from src.converter.ConverterRegistry import make_default_converter_registry
 from src.formalmodels.BaseFormalModel import BaseFormalModel
 from src.formalmodels.DummyFormalModels import DummyIPCFormalModel, DummySASBFormalModel
-from src.formalmodels.LASSIFormalModel import LASSIFormalModel
+from src.formalmodels.LASSIFormalModel import (
+    LASSIFormalModel,
+    lassi_parameter_space,
+    lassi_parameters_with,
+)
 from src.utils.ports import (
     API_PORT_CANDIDATES,
     API_PORT_VARIABLE,
@@ -42,6 +46,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 
 def make_dummy_ipc_model(
     agent_id: str,
+    parameters: dict[str, dict[str, float]] | None = None,
 ) -> BaseFormalModel:
     """
     Create a dummy IPC model instance for one agent.
@@ -51,6 +56,7 @@ def make_dummy_ipc_model(
 
     Args:
         agent_id: Identifier of the agent the instance belongs to.
+        parameters: Unused; the dummy model has no parameter space.
 
     Returns:
         Formal model instance.
@@ -61,12 +67,14 @@ def make_dummy_ipc_model(
 
 def make_dummy_sasb_model(
     agent_id: str,
+    parameters: dict[str, dict[str, float]] | None = None,
 ) -> BaseFormalModel:
     """
     Create a dummy SASB model instance for one agent.
 
     Args:
         agent_id: Identifier of the agent the instance belongs to.
+        parameters: Unused; the dummy model has no parameter space.
 
     Returns:
         Formal model instance.
@@ -77,18 +85,20 @@ def make_dummy_sasb_model(
 
 def make_lassi_model(
     agent_id: str,
+    parameters: dict[str, dict[str, float]] | None = None,
 ) -> BaseFormalModel:
     """
     Create a LASSI agency-communion model instance for one agent.
 
     Args:
         agent_id: Identifier of the agent the instance belongs to.
+        parameters: BD and IR per axis, merged into the configured parameters.
 
     Returns:
         Formal model instance.
     """
 
-    return LASSIFormalModel(model_id=agent_id)
+    return LASSIFormalModel(model_id=agent_id, parameters=lassi_parameters_with(parameters))
 
 
 def make_catalogue() -> ModelCatalogue:
@@ -150,6 +160,7 @@ def make_catalogue() -> ModelCatalogue:
                     maximum_turns=500,
                     supports_persistence=True,
                 ),
+                parameter_space=lassi_parameter_space(),
             ),
         ]
     )

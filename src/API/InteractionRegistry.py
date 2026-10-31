@@ -41,6 +41,7 @@ from src.API.Invitation import (
     make_invitation_code,
 )
 from src.API.ModelCatalogue import ModelCatalogue, ModelEntry
+from src.formalmodels.ParameterSpace import ParameterError
 from src.utils.utilfuncs import make_iso_timestamp
 
 DEFAULT_CONTEXT = "workplace_colleague_conversation"
@@ -185,6 +186,7 @@ class InteractionRegistry:
                 starting_role=request.get("startingAgentRole", "A"),
                 converter=self.converter,
                 results_root=self.results_root,
+                client_request_id=client_request_id,
             )
 
             token = make_interaction_token()
@@ -965,6 +967,8 @@ class InteractionRegistry:
                     ),
                 )
 
+            configuration = specification.get("configuration")
+
             agent = AgentSlot(
                 agent_id=str(uuid4()),
                 role=role,
@@ -972,8 +976,13 @@ class InteractionRegistry:
                 state_space=specification.get("stateSpace")
                 or (agent_model or model_entry).state_space,
                 display_name=specification.get("displayName"),
-                configuration=specification.get("configuration"),
+                configuration=configuration,
                 model_entry=agent_model,
+                parameters=self._resolve_parameters(
+                    role=role,
+                    agent_model=agent_model,
+                    configuration=configuration,
+                ),
             )
 
             if agent_model is not None:
@@ -988,6 +997,42 @@ class InteractionRegistry:
             agents[role] = agent
 
         return agents
+
+    def _resolve_parameters(
+        self,
+        role: str,
+        agent_model: ModelEntry | None,
+        configuration: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        """
+        Resolve the configuration of one agent into its model parameters.
+
+        Args:
+            role: Role of the agent.
+            agent_model: Catalogue entry of the model the agent runs, or None
+                for a human agent.
+            configuration: The agent's configuration from the request.
+
+        Returns:
+            Selection, seed and values of the parameters, or None for a human
+            agent or a model without a parameter space.
+        """
+
+        if agent_model is None:
+            if configuration:
+                raise ProblemDetail(
+                    problem_type="invalid-configuration",
+                    detail=f"Agent {role} is human; only a model agent takes a configuration.",
+                )
+            return None
+
+        try:
+            return agent_model.resolve_configuration(configuration)
+        except ParameterError as error:
+            raise ProblemDetail(
+                problem_type="invalid-configuration",
+                detail=f"Agent {role}: {error}",
+            ) from error
 
     def _instantiate_model(
         self,
@@ -1015,7 +1060,10 @@ class InteractionRegistry:
             )
 
         try:
-            return model_entry.create_model(agent_id=agent.agent_id)
+            return model_entry.create_model(
+                agent_id=agent.agent_id,
+                parameters=(agent.parameters or {}).get("values"),
+            )
         except (TypeError, ValueError) as error:
             raise ProblemDetail(
                 problem_type="invalid-configuration",

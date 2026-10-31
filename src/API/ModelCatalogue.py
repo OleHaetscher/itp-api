@@ -5,7 +5,9 @@ The ITP API specification binds every interaction to an exact model id and
 model version, and exposes the available models through ``GET /models``. This
 module holds that catalogue: one entry per model, each carrying the factory
 that produces a fresh model instance per agent and the state space schema used
-to validate perceptions and behaviors.
+to validate perceptions and behaviors. A model that lets agents differ in its
+parameters also carries the ParameterSpace an agent's ``configuration`` is
+resolved against.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from typing import Any, Callable
 
 from src.API.StateSpaceSchema import StateSpaceSchema
 from src.formalmodels.BaseFormalModel import BaseFormalModel
+from src.formalmodels.ParameterSpace import ParameterError, ParameterSpace
 
 MODEL_STATUSES = ("available", "maintenance", "deprecated", "unavailable")
 AGENT_TYPES = ("human", "model")
@@ -67,12 +70,16 @@ class ModelEntry:
         version: Exact model version an interaction is bound to.
         name: Readable model name.
         description: Readable model description.
-        model_factory: Callable producing a fresh model instance per agent.
+        model_factory: Callable producing a fresh model instance per agent,
+            from the agent id and the parameter values the agent runs with
+            (None for a model without a parameter space).
         state_space: ITP state space identifier the model works in.
         status: Availability of the model for new interactions.
         supported_agent_types: Agent types the model can be paired with.
         interaction_mode: Turn mode of interactions using this model.
         constraints: Constraints on interactions using this model.
+        parameter_space: Parameters an agent's configuration may choose, or
+            None if every agent runs the same model.
 
     Returns:
     """
@@ -81,12 +88,13 @@ class ModelEntry:
     version: str
     name: str
     description: str
-    model_factory: Callable[[str], BaseFormalModel]
+    model_factory: Callable[[str, dict[str, dict[str, float]] | None], BaseFormalModel]
     state_space: str
     status: str = "available"
     supported_agent_types: tuple[str, ...] = AGENT_TYPES
     interaction_mode: str = "turnBased"
     constraints: ModelConstraints = field(default_factory=ModelConstraints)
+    parameter_space: ParameterSpace | None = None
 
     def __post_init__(self) -> None:
         """
@@ -123,21 +131,49 @@ class ModelEntry:
 
         return self.status == "available"
 
+    def resolve_configuration(
+        self,
+        configuration: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        """
+        Resolve an agent's configuration into the parameters it runs with.
+
+        Args:
+            configuration: The agent's configuration from the creation request.
+
+        Returns:
+            Selection, seed and values from ParameterSpace.resolve, or None for
+            a model without a parameter space.
+        """
+
+        if self.parameter_space is None:
+            if configuration:
+                raise ParameterError(
+                    f"Model {self.model_id} has no parameters to configure; "
+                    "leave out configuration."
+                )
+            return None
+
+        return self.parameter_space.resolve(configuration)
+
     def create_model(
         self,
         agent_id: str,
+        parameters: dict[str, dict[str, float]] | None = None,
     ) -> BaseFormalModel:
         """
         Create a fresh model instance for one agent.
 
         Args:
             agent_id: Identifier of the agent the instance belongs to.
+            parameters: Parameter values the agent runs with, keyed by group,
+                then by name; None for the model's defaults.
 
         Returns:
             Formal model instance.
         """
 
-        model = self.model_factory(agent_id)
+        model = self.model_factory(agent_id, parameters)
         model.validate_model_interface()
 
         if model.state_space != self.state_space:
@@ -199,6 +235,11 @@ class ModelEntry:
                 if key != "stateSpaceSchema"
             },
             "constraints": self.constraints.describe(),
+            "parameterSpace": (
+                self.parameter_space.describe()
+                if self.parameter_space is not None
+                else None
+            ),
         }
 
 

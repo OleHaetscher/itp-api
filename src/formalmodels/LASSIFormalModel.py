@@ -63,6 +63,7 @@ from typing import Any
 import numpy as np
 
 from src.formalmodels.BaseFormalModel import BaseFormalModel
+from src.formalmodels.ParameterSpace import Parameter, ParameterSpace
 from src.utils.utilfuncs import load_config
 
 LASSI_CONFIG_NAME = "formal_model_parameters.yaml"
@@ -118,6 +119,90 @@ def load_lassi_parameters() -> dict[str, dict[str, Any]]:
         dimension: {**shared, **axis_parameters}
         for dimension, axis_parameters in config[LASSI_AXES_KEY].items()
     }
+
+
+def lassi_parameter_space() -> ParameterSpace:
+    """
+    Describe the LASSI parameters an interaction may choose per agent.
+
+    BD and IR vary per axis; the configured values are the defaults. The
+    repertoire width, the relaxation rate, the axis signs and the number of
+    states stay as configured, because they are properties of the model as
+    studied rather than of the person.
+
+    Args:
+
+    Returns:
+        Parameter space of the LASSI model.
+    """
+
+    configured = load_lassi_parameters()
+    parameters = []
+
+    for dimension, axis in configured.items():
+        num_states = int(axis["num_states"])
+        parameters.extend(
+            [
+                Parameter(
+                    group=dimension,
+                    name="BD",
+                    label=f"{axis['name']} behavioral default",
+                    minimum=1.0,
+                    maximum=float(num_states),
+                    default=float(axis["BD"]),
+                    exclusive=True,
+                    description=(
+                        f"Mean of the habitual repertoire on the ITP scale 1 to {num_states}, "
+                        "strictly inside it."
+                    ),
+                ),
+                Parameter(
+                    group=dimension,
+                    name="IR",
+                    label=f"{axis['name']} interpersonal reactivity",
+                    minimum=-1.0,
+                    maximum=1.0,
+                    default=float(axis["IR"]),
+                    description=(
+                        "Signed weight on the partner against the behavioral default: "
+                        "+1 fully complementary, 0 default only, -1 fully anti-complementary."
+                    ),
+                ),
+            ]
+        )
+
+    fixed = {
+        dimension: {
+            key: value
+            for key, value in axis.items()
+            if key not in ("name", "BD", "IR")
+        }
+        for dimension, axis in configured.items()
+    }
+
+    return ParameterSpace(parameters=parameters, fixed=fixed)
+
+
+def lassi_parameters_with(
+    values: dict[str, dict[str, float]] | None,
+) -> dict[str, dict[str, Any]]:
+    """
+    Merge chosen BD and IR values into the configured LASSI parameters.
+
+    Args:
+        values: Values keyed by axis, then by parameter name, as returned by
+            ParameterSpace.resolve; None keeps the configuration.
+
+    Returns:
+        Axis parameters for LASSIFormalModel.
+    """
+
+    parameters = load_lassi_parameters()
+
+    for dimension, axis_values in (values or {}).items():
+        parameters[dimension].update(axis_values)
+
+    return parameters
 
 
 def build_state_grid(

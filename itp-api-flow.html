@@ -348,6 +348,28 @@
     box-shadow: var(--shadow);
     overflow: hidden;
   }
+  /* ---- figure (00) ---- */
+  .figure-card {
+    margin-top: 1.3rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: 1.1rem;
+  }
+  .figure-card svg { display: block; width: 100%; height: auto; }
+  .figure-actions {
+    display: flex; align-items: center; gap: .7rem; flex-wrap: wrap;
+    margin-top: .9rem; padding-top: .9rem; border-top: 1px solid var(--line);
+  }
+  .figure-actions button {
+    font-family: var(--sans); font-size: 14px; font-weight: 600; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: .38rem .7rem; cursor: pointer; line-height: 1;
+  }
+  .figure-actions button:hover { border-color: var(--primary); color: var(--primary); }
+  .figure-hint { font-size: 13px; color: var(--muted); }
+
   .walk-bar {
     display: flex; align-items: center; gap: .7rem; flex-wrap: wrap;
     padding: .85rem 1.1rem; border-bottom: 1px solid var(--line); background: var(--surface-2);
@@ -561,6 +583,136 @@
         <span class="item"><span class="dot stop"></span>Failure</span>
       </div>
     </header>
+
+    <hr class="rule" />
+
+    <!-- ============ 00 AT A GLANCE ============ -->
+    <section class="section">
+      <h2><span class="idx">00</span> At a glance</h2>
+      <p class="note">The whole workflow in one picture, and Figure 1 of the ITP paper. Clients act through the web API (remote route); models in the shared codebase are run by the server itself (local route). The sections below take each step apart.</p>
+
+      <div class="figure-card">
+        <!-- Explicit colours and fonts rather than CSS variables, so the
+             exported file renders the same in Word and in a browser. Sizes are
+             set for 6.2 in of print width: 21 units are 7.5 pt. -->
+        <svg id="fig-workflow" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 500" role="img"
+             aria-labelledby="fig-workflow-title" font-family="Helvetica, Arial, sans-serif">
+          <title id="fig-workflow-title">Running an interaction on the ITP platform</title>
+          <defs>
+            <marker id="fig1-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#6B7280" />
+            </marker>
+          </defs>
+          <rect x="0" y="0" width="1240" height="500" fill="#FFFFFF" />
+
+          <!-- column heads -->
+          <text x="0" y="20" font-size="23" font-weight="700" fill="#1F2937">Clients</text>
+          <text x="0" y="45" font-size="21" fill="#6B7280">Remote route: through the web API</text>
+          <text x="360" y="20" font-size="23" font-weight="700" fill="#1F2937">ITP server</text>
+          <text x="360" y="45" font-size="21" fill="#6B7280">Owns turns, conversion, validation and the record</text>
+          <text x="1000" y="20" font-size="23" font-weight="700" fill="#1F2937">Hosted models</text>
+          <text x="1000" y="45" font-size="21" fill="#6B7280">Local route</text>
+
+          <!-- clients -->
+          <rect x="1" y="64" width="298" height="420" rx="12" fill="#FFFFFF" stroke="#9CA3AF" stroke-width="1.5" />
+          <rect x="12" y="75" width="276" height="194" rx="8" fill="#F3F4F6" />
+          <text x="22" y="102" font-size="23" font-weight="700" fill="#1F2937">Human participant</text>
+          <text font-size="21" fill="#374151">
+            <tspan x="22" y="138">Browser client in the</tspan>
+            <tspan x="22" y="165">repository, the web client</tspan>
+            <tspan x="22" y="192">example, or your own</tspan>
+          </text>
+          <rect x="12" y="279" width="276" height="194" rx="8" fill="#F3F4F6" />
+          <text x="22" y="322" font-size="23" font-weight="700" fill="#1F2937">Remote formal model</text>
+          <text font-size="21" fill="#374151">
+            <tspan x="22" y="358">Runs on your own</tspan>
+            <tspan x="22" y="385">infrastructure, in any</tspan>
+            <tspan x="22" y="412">language, and acts like</tspan>
+            <tspan x="22" y="439">any other client</tspan>
+          </text>
+
+          <!-- one request and its answer per step -->
+          <g stroke="#6B7280" stroke-width="2" marker-start="url(#fig1-arrow)" marker-end="url(#fig1-arrow)">
+            <line x1="308" y1="106" x2="352" y2="106" />
+            <line x1="308" y1="190" x2="352" y2="190" />
+            <line x1="308" y1="274" x2="352" y2="274" />
+            <line x1="308" y1="358" x2="352" y2="358" />
+            <line x1="308" y1="442" x2="352" y2="442" />
+          </g>
+
+          <!-- server -->
+          <rect x="360" y="64" width="600" height="420" rx="12" fill="#F1F7F4" stroke="#0E6B51" stroke-width="1.5" />
+          <rect x="368" y="320" width="584" height="76" rx="8" fill="#FBF1E1" />
+          <g stroke="#D7E6DF" stroke-width="1.5">
+            <line x1="376" y1="148" x2="944" y2="148" />
+            <line x1="376" y1="232" x2="944" y2="232" />
+            <line x1="376" y1="316" x2="944" y2="316" />
+            <line x1="376" y1="400" x2="944" y2="400" />
+          </g>
+          <g fill="#0E6B51">
+            <circle cx="392" cy="106" r="16" />
+            <circle cx="392" cy="190" r="16" />
+            <circle cx="392" cy="274" r="16" />
+            <circle cx="392" cy="358" r="16" />
+            <circle cx="392" cy="442" r="16" />
+          </g>
+          <g font-size="20" font-weight="700" fill="#FFFFFF" text-anchor="middle">
+            <text x="392" y="113">1</text>
+            <text x="392" y="197">2</text>
+            <text x="392" y="281">3</text>
+            <text x="392" y="365">4</text>
+            <text x="392" y="449">5</text>
+          </g>
+          <g font-size="23" font-weight="700" fill="#1F2937">
+            <text x="422" y="100">Choose a model</text>
+            <text x="422" y="184">Create an interaction</text>
+            <text x="422" y="268">Join</text>
+            <text x="422" y="352">Interact</text>
+            <text x="422" y="436">Retrieve the record</text>
+          </g>
+          <g font-size="17" font-family="Menlo, Consolas, monospace" fill="#0E6B51" text-anchor="end">
+            <text x="944" y="99">GET /models</text>
+            <text x="944" y="183">POST /interactions</text>
+            <text x="944" y="267">POST …/register</text>
+            <text x="944" y="351">GET …/perception · POST …/actions</text>
+            <text x="944" y="435">GET …/results</text>
+          </g>
+          <g font-size="21" fill="#374151">
+            <text x="422" y="128">Models and the state space each one uses</text>
+            <text x="422" y="212">Two agents, model or client; number of turns</text>
+            <text x="422" y="296">Each client agent registers and gets a token</text>
+            <text x="422" y="380">Each turn: run models, <tspan fill="#8F5B12" font-weight="700">convert</tspan>, validate, store</text>
+            <text x="422" y="464">ITP messages, original and converted</text>
+          </g>
+
+          <!-- hosted models, played by the server on their turns -->
+          <line x1="966" y1="358" x2="994" y2="358" stroke="#6B7280" stroke-width="2"
+                marker-start="url(#fig1-arrow)" marker-end="url(#fig1-arrow)" />
+          <rect x="1001" y="64" width="238" height="420" rx="12" fill="#EEF4FB" stroke="#2C6BB5" stroke-width="1.5" />
+          <text x="1020" y="102" font-size="23" font-weight="700" fill="#1F2937">In the codebase</text>
+          <text font-size="21" fill="#374151">
+            <tspan x="1020" y="138">A subclass of the</tspan>
+            <tspan x="1020" y="165">model base class that</tspan>
+            <tspan x="1020" y="192">declares its state</tspan>
+            <tspan x="1020" y="219">space; the server</tspan>
+            <tspan x="1020" y="246">plays its turns</tspan>
+          </text>
+          <g font-size="20" fill="#2C6BB5">
+            <rect x="1020" y="300" width="200" height="40" rx="20" fill="#FFFFFF" stroke="#2C6BB5" stroke-width="1.2" />
+            <text x="1120" y="327" text-anchor="middle">LASSI · AC</text>
+            <rect x="1020" y="352" width="200" height="40" rx="20" fill="#FFFFFF" stroke="#2C6BB5" stroke-width="1.2" />
+            <text x="1120" y="379" text-anchor="middle">IPC model · IPC</text>
+            <rect x="1020" y="404" width="200" height="40" rx="20" fill="#FFFFFF" stroke="#2C6BB5" stroke-width="1.2" />
+            <text x="1120" y="431" text-anchor="middle">SASB model · SASB</text>
+          </g>
+        </svg>
+        <div class="figure-actions">
+          <button type="button" data-export-svg="fig-workflow" data-export-name="itp_figure1_workflow">Download SVG</button>
+          <button type="button" data-export-png="fig-workflow" data-export-name="itp_figure1_workflow">Download PNG</button>
+          <span class="figure-hint">PNG at 3720 px wide, 600 dpi at 6.2 in</span>
+        </div>
+      </div>
+    </section>
 
     <hr class="rule" />
 
@@ -886,7 +1038,7 @@
           </thead>
           <tbody>
             <tr><td class="st r-model">GET</td><td class="ep">/models</td><td class="pu">The models available for new interactions.</td><td class="auth">—</td><td class="st">200</td></tr>
-            <tr><td class="st r-model">GET</td><td class="ep">/models/{modelId}</td><td class="pu">Model definition and the shared <code>stateSpaceSchema</code>.</td><td class="auth">—</td><td class="st">200</td></tr>
+            <tr><td class="st r-model">GET</td><td class="ep">/models/{modelId}</td><td class="pu">Model definition, the shared <code>stateSpaceSchema</code>, and the <code>parameterSpace</code> of a model whose agents may differ.</td><td class="auth">—</td><td class="st">200</td></tr>
             <tr><td class="st r-api">POST</td><td class="ep">/interactions</td><td class="pu">Create an interaction. Returns the token, and an invitation code when a second human must join.</td><td class="auth">—</td><td class="st">201</td></tr>
             <tr><td class="st r-api">POST</td><td class="ep">/interactions/join</td><td class="pu">Redeem a six-digit code, register the invited participant, receive a token.</td><td class="auth">—</td><td class="st">200</td></tr>
             <tr><td class="st r-model">GET</td><td class="ep">/interactions/{sessionId}</td><td class="pu">Status, turn, active agents, invitation status without the code.</td><td class="auth r-api">bearer</td><td class="st">200</td></tr>
@@ -911,7 +1063,7 @@
             <tr><td class="st"><span class="status-code r-convert">404</span></td><td class="pu">Unknown model, interaction, agent, or invitation code.</td></tr>
             <tr><td class="st"><span class="status-code r-convert">409</span></td><td class="pu">Wrong turn, agent not expected to act, already acted, actionId reused with different content, invitation already used, registration for a different participant.</td></tr>
             <tr><td class="st"><span class="status-code r-convert">410</span></td><td class="pu">Invitation expired; or results discarded because persistence was disabled.</td></tr>
-            <tr><td class="st"><span class="status-code r-convert">422</span></td><td class="pu">State vector fails the stateSpaceSchema, or the configuration violates the model constraints.</td></tr>
+            <tr><td class="st"><span class="status-code r-convert">422</span></td><td class="pu">State vector fails the stateSpaceSchema, or the configuration violates the model constraints or its parameter space.</td></tr>
             <tr><td class="st"><span class="status-code r-convert">429</span></td><td class="pu">Too many failed invitation attempts. Carries <code>retryAfterSeconds</code>.</td></tr>
             <tr><td class="st"><span class="status-code r-stop">500</span></td><td class="pu">A formal model failed. The interaction ends with <code>modelFailure</code>.</td></tr>
           </tbody>
@@ -1231,6 +1383,64 @@
   });
 
   show(0);
+})();
+</script>
+<script>
+/* Figure export. The SVG is written as it stands; the PNG is drawn from that
+   SVG at three times its view box, which is 600 dpi at 6.2 in of print width. */
+(function () {
+  "use strict";
+
+  var PNG_SCALE = 3;
+
+  function serialize(svg) {
+    var copy = svg.cloneNode(true);
+    copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    copy.setAttribute("width", String(svg.viewBox.baseVal.width));
+    copy.setAttribute("height", String(svg.viewBox.baseVal.height));
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(copy);
+  }
+
+  function save(blob, name) {
+    var link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
+  }
+
+  function exportSvg(svg, name) {
+    save(new Blob([serialize(svg)], { type: "image/svg+xml" }), name + ".svg");
+  }
+
+  function exportPng(svg, name) {
+    var box = svg.viewBox.baseVal;
+    var image = new Image();
+    image.onload = function () {
+      var canvas = document.createElement("canvas");
+      canvas.width = box.width * PNG_SCALE;
+      canvas.height = box.height * PNG_SCALE;
+      var context = canvas.getContext("2d");
+      context.fillStyle = "#FFFFFF";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(function (blob) { save(blob, name + ".png"); }, "image/png");
+    };
+    image.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(serialize(svg));
+  }
+
+  document.querySelectorAll("[data-export-svg]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      exportSvg(document.getElementById(button.dataset.exportSvg), button.dataset.exportName);
+    });
+  });
+  document.querySelectorAll("[data-export-png]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      exportPng(document.getElementById(button.dataset.exportPng), button.dataset.exportName);
+    });
+  });
 })();
 </script>
 </body>
