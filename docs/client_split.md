@@ -8,7 +8,7 @@ Status: decided in principle, not started. Recorded 2026-09-24.
 specification assumes. It is becoming more than that: the simple client
 participants use to let their own formal model exchange ITP numbers with other
 models. That makes it a product with its own users and release cycle, and it
-should not ship inside the reference implementation of the protocol.
+should not ship inside the code repository of the protocol and platform.
 
 It will probably move into a separate repository. The cut happens later, on its
 own branch, after the port work is committed. Until then, nothing new should
