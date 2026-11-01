@@ -83,7 +83,7 @@ schema validation, and are echoed in the schema under `x-itp-geometry` so a
 client can see them. Supported: `box`, `diamond`, `circle`, `disk`, and
 `constrained` with `sumEquals`, `weightedSum`, and `manhattanDistance`.
 
-This closes the gap the README notes under converters: geometry is now enforced
+This closes the gap noted for the converters in `development.md`: geometry is now enforced
 at the API boundary, even though the converters themselves still do not enforce
 it in general. See *Known gaps* below.
 
