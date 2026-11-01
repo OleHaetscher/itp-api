@@ -17,10 +17,10 @@ it:
   behind an nginx ingress, with the record in a persistent volume at `/app/results`. Its deploy
   pipeline is also started by hand.
 
-A merged commit is therefore live only after both pipelines have run. On 2026-11-01 the live
-server was still the build of 2026-10-10: its OpenAPI document required `turn` on every action and
-had no `cursor` in the action response and no `parameterSpace`. Check `/docs/openapi.json` before
-pointing a client at features newer than the last build.
+A merged commit is therefore live only after both pipelines have run. Since 2026-11-01 the live
+server runs `main` with PR #4: actions take an optional `turn` and return a `cursor`, and LASSI
+publishes its `parameterSpace` (checked with a seeded LASSI interaction against the gateway). Check
+`/docs/openapi.json` before pointing a client at features newer than the last build.
 
 The image (`Dockerfile`) holds `src/`, `schema/` and `configs/` only. It runs
 `python -m src.run_model_api` as the unprivileged `appuser` and exposes 8001. `/app` stays owned by
