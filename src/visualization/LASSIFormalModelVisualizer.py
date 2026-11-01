@@ -100,8 +100,8 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
 
         super().__init__(
             source=model,
-            title="State Distribution Updating",
-            subtitle="Formale Modellierung",
+            title="LASSI model turn-to-turn updating",
+            subtitle="Formal model visualization",
             description=(
                 "Interactive walk-through of one exchange on a single interpersonal "
                 "axis. The expected state is a convex mixture of where the agent "
