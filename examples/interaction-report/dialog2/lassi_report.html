@@ -1,0 +1,1016 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ITP Interaction Report</title>
+<!--
+  Template of InteractionReport (src/visualization/InteractionReport.py).
+  The data line below is replaced with the recorded interaction; everything
+  else is the same in every report. One file, no dependencies, nothing
+  fetched, so a written report opens from disk and can go out as a
+  supplement.
+
+  The figure is one SVG drawn by the panel functions further down. Each panel
+  draws into the box the layout gives it and reads nothing but DATA and the
+  selected turn, so a panel can be added without touching the others.
+-->
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #FAFAFA;
+    --surface: #FFFFFF;
+    --surface-2: #F3F4F6;
+    --ink: #1F2937;
+    --body: #374151;
+    --muted: #6B7280;
+    --line: #E5E7EB;
+    --primary: #2C6BB5;
+    --shadow: 0 1px 2px 0 rgba(31,41,55,.05), 0 6px 18px -4px rgba(31,41,55,.12);
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+  /* Light only, like the flow diagrams and the dashboards: the figure is
+     exported onto a white page, so the page it is read on stays white too. */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink); font-family: var(--sans);
+    line-height: 1.55; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1800px; margin: 0 auto; padding: clamp(1.5rem, 4vw, 3rem) 16px; }
+  .eyebrow {
+    font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--primary); margin: 0 0 6px;
+  }
+  h1 { font-size: clamp(1.6rem, 3vw, 2rem); line-height: 1.15; letter-spacing: -.02em; margin: 0 0 8px; }
+  .lede { color: var(--muted); font-size: 15px; margin: 0; max-width: 80ch; }
+  .lede + .lede { margin-top: .4rem; }
+  .lede code, td code { font-family: var(--mono); font-size: 13px; color: var(--ink); }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: var(--shadow); margin-top: 1.3rem; overflow: hidden;
+  }
+  .bar {
+    display: flex; align-items: center; gap: .6rem 1rem; flex-wrap: wrap;
+    padding: .8rem 1.1rem; background: var(--surface-2); border-bottom: 1px solid var(--line);
+  }
+  .bar .group { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+  .bar .sep { width: 1px; align-self: stretch; background: var(--line); }
+  button, select {
+    font-family: var(--sans); font-size: 14px; font-weight: 600; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: .38rem .7rem; cursor: pointer; line-height: 1.1;
+  }
+  button:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+  button:disabled { opacity: .4; cursor: default; }
+  input[type=range] { width: min(260px, 50vw); accent-color: var(--primary); }
+  label { font-size: 14px; color: var(--body); display: inline-flex; align-items: center; gap: .3rem; }
+  label.off { color: var(--muted); }
+  .count { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  :where(a, button, select, input):focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+  .figure { padding: 1.1rem; }
+  .figure svg { display: block; width: 100%; height: auto; }
+
+  .turn { padding: 1rem 1.1rem 1.1rem; }
+  .turn h2 { font-size: 17px; margin: 0 0 .6rem; letter-spacing: -.01em; }
+  .turn table { border-collapse: collapse; font-size: 14px; width: 100%; }
+  .turn th, .turn td { text-align: left; padding: .4rem .6rem; border-top: 1px solid var(--line); vertical-align: top; }
+  .turn th { color: var(--muted); font-weight: 600; width: 13rem; }
+  details { margin-top: .8rem; }
+  summary { cursor: pointer; font-size: 14px; color: var(--primary); font-weight: 600; }
+  pre {
+    font-family: var(--mono); font-size: 12.5px; background: var(--surface-2); border-radius: 8px;
+    padding: .8rem; overflow-x: auto; margin: .6rem 0 0;
+  }
+  .messages { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: .8rem; }
+  .messages h3 { font-size: 13px; color: var(--muted); margin: .6rem 0 0; font-weight: 600; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 1.2rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Interpersonal Transaction Protocol · interaction report</p>
+    <h1 id="title"></h1>
+    <p class="lede" id="lede-agents"></p>
+    <p class="lede" id="lede-record"></p>
+    <p class="lede" id="lede-text"></p>
+  </header>
+
+  <div class="card">
+    <div class="bar">
+      <div class="group">
+        <button type="button" id="prev" aria-label="Previous turn">◀</button>
+        <input type="range" id="slider" min="1" step="1" aria-label="Turn" />
+        <button type="button" id="next" aria-label="Next turn">▶</button>
+        <span class="count">turn <span id="turn-n"></span> of <span id="turn-max"></span></span>
+      </div>
+      <span class="sep"></span>
+      <div class="group" id="toggles">
+        <label id="label-dialogue"><input type="checkbox" data-panel="dialogue" /> Dialogue</label>
+        <label><input type="checkbox" data-panel="planes" /> State spaces</label>
+        <label><input type="checkbox" data-panel="dimensions" /> Over turns in</label>
+        <select id="time-space" aria-label="State space drawn over turns"></select>
+      </div>
+      <span class="sep"></span>
+      <div class="group">
+        <button type="button" id="export-svg">Download SVG</button>
+        <button type="button" id="export-png">Download PNG</button>
+      </div>
+    </div>
+    <div class="figure"><svg id="figure" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Interaction figure"></svg></div>
+  </div>
+
+  <div class="card turn">
+    <h2 id="turn-title"></h2>
+    <table><tbody id="turn-table"></tbody></table>
+    <details>
+      <summary>ITP messages of this turn</summary>
+      <div class="messages" id="turn-messages"></div>
+    </details>
+  </div>
+
+  <footer>
+    Written by <code>python -m src.run_interaction_report</code> from the ITP record alone; the dialogue, if shown,
+    comes from a separate file joined on turn and role. Filled markers are behavior as sent, in the sender's own
+    state space; hollow markers are the partner's behavior as the converter delivered it into this space.
+    The PNG export is drawn at three times the figure's width, 600 dpi at the print width the report was written for.
+  </footer>
+</div>
+
+<script>
+const DATA = {"sessionId": "2b744889-0801-4ae1-9e7c-d4475613c27c", "resultsFolder": "20261029_115437_2b744889", "context": "workplace_colleague_conversation", "status": "terminated", "endReason": "terminatedByClient", "numberOfTurns": 200, "agents": {"A": {"role": "A", "id": "d0fa67ce-a8a1-407e-9ea0-1a4074d205e6", "type": "human", "model": null, "modelId": null, "stateSpace": {"id": "ac", "abbreviation": "AC", "caption": "Discrete agency-communion Cartesian space", "type": "discrete", "system": "cartesian", "dimensions": [{"key": "A", "caption": "Agency", "minimum": 1, "maximum": 7}, {"key": "C", "caption": "Communion", "minimum": 1, "maximum": 7}], "axes": {"x": "C", "y": "A"}}, "parameters": null, "label": "Lukas Wagner (assessed messages)"}, "B": {"role": "B", "id": "9cf52371-11ba-4741-9ec1-2d58967a921f", "type": "model", "model": "LASSI agency-communion model", "modelId": "lassi", "stateSpace": {"id": "ac", "abbreviation": "AC", "caption": "Discrete agency-communion Cartesian space", "type": "discrete", "system": "cartesian", "dimensions": [{"key": "A", "caption": "Agency", "minimum": 1, "maximum": 7}, {"key": "C", "caption": "Communion", "minimum": 1, "maximum": 7}], "axes": {"x": "C", "y": "A"}}, "parameters": {"selection": "default", "randomSeed": null, "explicit": ["A.BD", "A.IR", "C.BD", "C.IR"], "values": {"A": {"BD": 3.5, "IR": 0.8}, "C": {"BD": 5.0, "IR": 0.8}}}, "label": "Daniel Becker (LASSI: A: BD 3.5, IR 0.8; C: BD 5, IR 0.8)"}}, "turns": [{"turn": 1, "role": "A", "messages": {"original": {"schema_version": "0.2", "source_agent": {"id": "d0fa67ce-a8a1-407e-9ea0-1a4074d205e6", "state_space": "ac", "analysis_unit": "monadic"}, "target_agent": {"id": "9cf52371-11ba-4741-9ec1-2d58967a921f", "state_space": "ac", "analysis_unit": "monadic"}, "timecode": {"timestamp": "1:01", "interaction_turn": 1, "api_turn": 1, "iso_timestamp": "2026-10-29T10:54:37Z"}, "values": {"state_space": "ac", "analysis_unit": "monadic", "data": {"A": 6.0, "C": 2.0}}, "context": "workplace_colleague_conversation", "metadata": {"session_id": "2b744889-0801-4ae1-9e7c-d4475613c27c", "agent_role": "A", "agent_type": "human"}}}, "sent": {"stateSpace": "ac", "data": {"A": 6.0, "C": 2.0}}, "interactionTurn": 1, "received": {"stateSpace": "ac", "data": {"A": 6.0, "C": 2.0}}}, {"turn": 2, "role": "B", "messages": {"original": {"schema_version": "0.2", "source_agent": {"id": "9cf52371-11ba-4741-9ec1-2d58967a921f", "state_space": "ac", "analysis_unit": "monadic"}, "target_agent": {"id": "d0fa67ce-a8a1-407e-9ea0-1a4074d205e6", "state_space": "ac", "analysis_unit": "monadic"}, "timecode": {"timestamp": "1:02", "interaction_turn": 1, "api_turn": 2, "iso_timestamp": "2026-10-29T10:54:37Z"}, "values": {"state_space": "ac", "analysis_unit": "monadic", "data": {"A": 3, "C": 7}}, "context": "workplace_colleague_conversation", "metadata": {"session_id": "2b744889-0801-4ae1-9e7c-d4475613c27c", "agent_role": "B", "agent_type": "model"}}}, "sent": {"stateSpace": "ac", "data": {"A": 3, "C": 7}}, "interactionTurn": 1, "received": {"stateSpace": "ac", "data": {"A": 3, "C": 7}}}, {"turn": 3, "role": "A", "messages": {"original": {"schema_version": "0.2", "source_agent": {"id": "d0fa67ce-a8a1-407e-9ea0-1a4074d205e6", "state_space": "ac", "analysis_unit": "monadic"}, "target_agent": {"id": "9cf52371-11ba-4741-9ec1-2d58967a921f", "state_space": "ac", "analysis_unit": "monadic"}, "timecode": {"timestamp": "2:01", "interaction_turn": 2, "api_turn": 3, "iso_timestamp": "2026-10-29T10:54:47Z"}, "values": {"state_space": "ac", "analysis_unit": "monadic", "data": {"A": 6.0, "C": 2.0}}, "context": "workplace_colleague_conversation", "metadata": {"session_id": "2b744889-0801-4ae1-9e7c-d4475613c27c", "agent_role": "A", "agent_type": "human"}}}, "sent": {"stateSpace": "ac", "data": {"A": 6.0, "C": 2.0}}, "interactionTurn": 2, "received": {"stateSpace": "ac", "data": {"A": 6.0, "C": 2.0}}}, {"turn": 4, "role": "B", "messages": {"original": {"schema_version": "0.2", "source_agent": {"id": "9cf52371-11ba-4741-9ec1-2d58967a921f", "state_space": "ac", "analysis_unit": "monadic"}, "target_agent": {"id": "d0fa67ce-a8a1-407e-9ea0-1a4074d205e6", "state_space": "ac", "analysis_unit": "monadic"}, "timecode": {"timestamp": "2:02", "interaction_turn": 2, "api_turn": 4, "iso_timestamp": "2026-10-29T10:54:47Z"}, "values": {"state_space": "ac", "analysis_unit": "monadic", "data": {"A": 2, "C": 3}}, "context": "workplace_colleague_conversation", "metadata": {"session_id": "2b744889-0801-4ae1-9e7c-d4475613c27c", "agent_role": "B", "agent_type": "model"}}}, "sent": {"stateSpace": "ac", "data": {"A": 2, "C": 3}}, "interactionTurn": 2, "received": {"stateSpace": "ac", "data": {"A": 2, "C": 3}}}, {"turn": 5, "role": "A", "messages": {"original": {"schema_version": "0.2", "source_agent": {"id": "d0fa67ce-a8a1-407e-9ea0-1a4074d205e6", "state_space": "ac", "analysis_unit": "monadic"}, "target_agent": {"id": "9cf52371-11ba-4741-9ec1-2d58967a921f", "state_space": "ac", "analysis_unit": "monadic"}, "timecode": {"timestamp": "3:01", "interaction_turn": 3, "api_turn": 5, "iso_timestamp": "2026-10-29T10:54:56Z"}, "values": {"state_space": "ac", "analysis_unit": "monadic", "data": {"A": 5.0, "C": 2.0}}, "context": "workplace_colleague_conversation", "metadata": {"session_id": "2b744889-0801-4ae1-9e7c-d4475613c27c", "agent_role": "A", "agent_type": "human"}}}, "sent": {"stateSpace": "ac", "data": {"A": 5.0, "C": 2.0}}, "interactionTurn": 3, "received": {"stateSpace": "ac", "data": {"A": 5.0, "C": 2.0}}}, {"turn": 6, "role": "B", "messages": {"original": {"schema_version": "0.2", "source_agent": {"id": "9cf52371-11ba-4741-9ec1-2d58967a921f", "state_space": "ac", "analysis_unit": "monadic"}, "target_agent": {"id": "d0fa67ce-a8a1-407e-9ea0-1a4074d205e6", "state_space": "ac", "analysis_unit": "monadic"}, "timecode": {"timestamp": "3:02", "interaction_turn": 3, "api_turn": 6, "iso_timestamp": "2026-10-29T10:54:56Z"}, "values": {"state_space": "ac", "analysis_unit": "monadic", "data": {"A": 4, "C": 4}}, "context": "workplace_colleague_conversation", "metadata": {"session_id": "2b744889-0801-4ae1-9e7c-d4475613c27c", "agent_role": "B", "agent_type": "model"}}}, "sent": {"stateSpace": "ac", "data": {"A": 4, "C": 4}}, "interactionTurn": 3, "received": {"stateSpace": "ac", "data": {"A": 4, "C": 4}}}, {"turn": 7, "role": "A", "messages": {"original": {"schema_version": "0.2", "source_agent": {"id": "d0fa67ce-a8a1-407e-9ea0-1a4074d205e6", "state_space": "ac", "analysis_unit": "monadic"}, "target_agent": {"id": "9cf52371-11ba-4741-9ec1-2d58967a921f", "state_space": "ac", "analysis_unit": "monadic"}, "timecode": {"timestamp": "4:01", "interaction_turn": 4, "api_turn": 7, "iso_timestamp": "2026-10-29T10:55:03Z"}, "values": {"state_space": "ac", "analysis_unit": "monadic", "data": {"A": 4.0, "C": 5.0}}, "context": "workplace_colleague_conversation", "metadata": {"session_id": "2b744889-0801-4ae1-9e7c-d4475613c27c", "agent_role": "A", "agent_type": "human"}}}, "sent": {"stateSpace": "ac", "data": {"A": 4.0, "C": 5.0}}, "interactionTurn": 4, "received": {"stateSpace": "ac", "data": {"A": 4.0, "C": 5.0}}}, {"turn": 8, "role": "B", "messages": {"original": {"schema_version": "0.2", "source_agent": {"id": "9cf52371-11ba-4741-9ec1-2d58967a921f", "state_space": "ac", "analysis_unit": "monadic"}, "target_agent": {"id": "d0fa67ce-a8a1-407e-9ea0-1a4074d205e6", "state_space": "ac", "analysis_unit": "monadic"}, "timecode": {"timestamp": "4:02", "interaction_turn": 4, "api_turn": 8, "iso_timestamp": "2026-10-29T10:55:03Z"}, "values": {"state_space": "ac", "analysis_unit": "monadic", "data": {"A": 3, "C": 3}}, "context": "workplace_colleague_conversation", "metadata": {"session_id": "2b744889-0801-4ae1-9e7c-d4475613c27c", "agent_role": "B", "agent_type": "model"}}}, "sent": {"stateSpace": "ac", "data": {"A": 3, "C": 3}}, "interactionTurn": 4, "received": {"stateSpace": "ac", "data": {"A": 3, "C": 3}}}], "texts": {"1": "No, it wasn’t about you. It was about that Bundesliga striker in the video everyone’s been sharing this week. If you think every joke is about you, that’s your problem, not mine.", "2": "Oh, okay, sorry. I guess I just felt a bit sensitive because of Sunday. I know I messed up and it’s been on my mind. I didn’t mean to accuse you or anything, really. If it was just about that video, then I totally misunderstood.", "3": "Yeah, well, you did. I wasn’t thinking about your miss at all. I just told the story because it was funny. If you want to talk about Sunday, fine, but don’t drag me into your guilt trip.", "4": "Alright, I get it. No need to get defensive. I just wanted to clear it up because it sounded a bit pointed, that’s all. I don’t expect you to care, but it’s not like I’m searching for sympathy either. Forget it.", "5": "Fine, whatever. I wasn’t trying to make you feel worse, but if you want to take it personally, that’s up to you. I’ve got nothing else to say about it.", "6": "Understood. I won’t bring it up again. Enjoy your evening.", "7": "Yeah, you too."}, "textSource": "PerTRAIN dialog 1ec16a96 on the local stack; messages generated by gpt-4.1, assessed in AC by gpt-5.4", "title": "Bar conflict, dialog 2, from the side of Daniel's model (LASSI)", "panels": ["dialogue", "planes", "dimensions"], "initialTurn": 8, "timeSpace": "ac", "printWidth": 9.0, "palette": {"background": "#FAFAFA", "panel": "#FFFFFF", "subtle": "#F3F4F6", "grid": "#E5E7EB", "text": "#1F2937", "body": "#374151", "muted": "#6B7280", "primary": "#2C6BB5", "agentA": "#2C6BB5", "agentB": "#D68A1F", "agency": "#315A7D", "communion": "#B84650"}};
+
+(function () {
+  "use strict";
+
+  // Figure geometry, in SVG units: 200 per inch of print width, so 6.2 in
+  // (portrait) is 1240 units and 9 in (landscape) 1800, and 22 units are
+  // 7.9 pt either way; nothing that carries meaning is set below 19. The
+  // dialogue keeps its share of the width, so a wider figure wraps less.
+  const UNITS_PER_INCH = 200;
+  const W = Math.round(UNITS_PER_INCH * DATA.printWidth);
+  const FONT = "Helvetica, Arial, sans-serif";
+  const MONO = "Menlo, Consolas, monospace";
+  const SIZE = { title: 25, body: 21, small: 23 };
+  const GAP = 34;
+  // The dialogue column takes 30% to 55% of the width: the share closest to
+  // 40% at which the charts over turns, stretched to end level with the
+  // dialogue, stay between DIMENSIONS_H and DIMENSIONS_MAX_H (see layout).
+  const DIALOGUE_SHARE = { min: 0.3, preferred: 0.4, max: 0.55, step: 0.005 };
+  let dialogueW = Math.round(W * DIALOGUE_SHARE.preferred);
+  const LANE_W = 130;
+  // Height of the charts over turns: at least DIMENSIONS_H; with a dialogue
+  // they stretch so that both columns end on one line, and the dialogue
+  // widens only as far as it takes to keep them within DIMENSIONS_MAX_H.
+  const DIMENSIONS_H = 270;
+  const DIMENSIONS_MAX_H = 380;
+  const DIALOGUE_MAX_H = 1300;
+  // Every panel opens with a lettered head and a rule under it.
+  const PANEL_HEAD_H = 52;
+  const LEGEND_ROW = 34;
+  const LEGEND_KEY = 44;
+  const CARD = { padding: 10, header: 22, gap: 8, width: 0.88 };
+  const PNG_SCALE = 3;
+
+  const NS = "http://www.w3.org/2000/svg";
+  const P = DATA.palette;
+  const roles = Object.keys(DATA.agents).sort();
+  const turns = DATA.turns;
+  const lastTurn = turns[turns.length - 1].turn;
+  const hasTexts = Object.keys(DATA.texts).length > 0;
+
+  const state = {
+    turn: DATA.initialTurn,
+    panels: new Set(DATA.panels),
+    timeSpace: DATA.timeSpace,
+  };
+
+  // ---------- helpers ----------
+
+  function node(tag, attrs, parent) {
+    const element = document.createElementNS(NS, tag);
+    for (const key in attrs) {
+      if (attrs[key] !== undefined && attrs[key] !== null) { element.setAttribute(key, attrs[key]); }
+    }
+    if (parent) { parent.appendChild(element); }
+    return element;
+  }
+
+  function text(parent, x, y, content, attrs) {
+    const all = Object.assign({ x: x, y: y, "font-size": SIZE.body, fill: P.body }, attrs || {});
+    // A halo is its own element under the text: Word ignores paint-order, paints
+    // the stroke over the fill and loses the label in its own halo.
+    if (all["paint-order"] === "stroke" && all.stroke) {
+      const halo = Object.assign({}, all, { fill: all.stroke });
+      delete halo["paint-order"];
+      node("text", halo, parent).textContent = content;
+      ["stroke", "stroke-width", "stroke-linejoin", "paint-order"].forEach(function (key) { delete all[key]; });
+    }
+    const element = node("text", all, parent);
+    element.textContent = content;
+    return element;
+  }
+
+  const measureContext = document.createElement("canvas").getContext("2d");
+  function measure(content, size, weight) {
+    measureContext.font = (weight || "400") + " " + size + "px " + FONT;
+    return measureContext.measureText(content).width;
+  }
+
+  function wrap(content, size, width) {
+    const words = content.split(/\s+/).filter(Boolean);
+    const lines = [];
+    let line = "";
+    for (const word of words) {
+      const candidate = line ? line + " " + word : word;
+      if (line && measure(candidate, size) > width) { lines.push(line); line = word; }
+      else { line = candidate; }
+    }
+    if (line) { lines.push(line); }
+    return lines;
+  }
+
+  // The first candidate that fits the width, at the size given; the last one
+  // is taken regardless.
+  function fit(candidates, size, width, weight) {
+    for (const candidate of candidates) {
+      if (measure(candidate, size, weight) <= width) { return candidate; }
+    }
+    return candidates[candidates.length - 1];
+  }
+
+  function agentColor(role) { return role === roles[0] ? P.agentA : P.agentB; }
+  function partnerOf(role) { return roles.find(function (other) { return other !== role; }); }
+  function describeParameters(parameters) {
+    // "A: BD 2.95, IR -0.70, C: ..." and how the values were chosen.
+    const values = Object.keys(parameters.values).map(function (group) {
+      const entries = parameters.values[group];
+      return group + ": " + Object.keys(entries).map(function (name) {
+        return name + " " + entries[name].toFixed(2);
+      }).join(", ");
+    }).join(", ");
+    const how = parameters.selection === "random" ? "drawn at random, seed " + parameters.randomSeed : "model defaults";
+    const explicit = parameters.explicit || [];
+    return values + " (" + (explicit.length ? "set " + explicit.join(", ") + "; others " + how : how) + ")";
+  }
+  // Letters follow the panels shown, in order, so a frame never skips one.
+  let panelCount = 0;
+  function panelHead(group, box, title) {
+    const letter = String.fromCharCode(97 + panelCount++);
+    const head = text(group, box.x, box.y + 24, "", { "font-size": SIZE.title, "font-weight": 700, fill: P.text });
+    const tag = document.createElementNS(NS, "tspan");
+    tag.textContent = letter + ")";
+    head.appendChild(tag);
+    // A gap by offset, because SVG collapses repeated spaces.
+    const rest = document.createElementNS(NS, "tspan");
+    rest.setAttribute("dx", 12);
+    rest.textContent = title;
+    head.appendChild(rest);
+    node("line", { x1: box.x, y1: box.y + 38, x2: box.x + box.w, y2: box.y + 38, stroke: P.grid, "stroke-width": 1.5 }, group);
+    return { x: box.x, y: box.y + PANEL_HEAD_H, w: box.w, h: box.h - PANEL_HEAD_H };
+  }
+
+  function shortName(role) { return DATA.agents[role].label.split(/,| \(/)[0]; }
+  function agentName(role) { return "Agent " + role + ": " + DATA.agents[role].label; }
+
+  function spaceById(id) {
+    for (const role of roles) {
+      if (DATA.agents[role].stateSpace.id === id) { return DATA.agents[role].stateSpace; }
+    }
+    return null;
+  }
+
+  function formatValue(space, key, value) {
+    const dimension = space.dimensions.find(function (d) { return d.key === key; });
+    if (dimension && dimension.unit === "degree") { return value.toFixed(1) + "°"; }
+    return Number.isInteger(value) ? String(value) : value.toFixed(2);
+  }
+
+  function formatValues(spaceId, data) {
+    const space = spaceById(spaceId);
+    return Object.keys(data).map(function (key) {
+      return key + " = " + (space ? formatValue(space, key, data[key]) : data[key]);
+    }).join(", ");
+  }
+
+  // Where a behavior lies in its space, as math coordinates of the plane:
+  // communion to the right and agency up in both kinds of space.
+  function planePoint(space, data) {
+    if (space.system === "polar") {
+      const angle = data[space.axes.angle] * Math.PI / 180;
+      const radius = data[space.axes.radius];
+      return [radius * Math.cos(angle), radius * Math.sin(angle)];
+    }
+    return [data[space.axes.x], data[space.axes.y]];
+  }
+
+  function visibleTurns() {
+    return turns.filter(function (entry) { return entry.turn <= state.turn; });
+  }
+
+  // ---------- layout ----------
+
+  // The planes are square, so their height follows from the width they get.
+  // 56 units on the left of a plane for its axis, 30 on the right for labels.
+  function planeSize(width) { return Math.min((width - LANE_W) / 2 - 56 - 30, 420); }
+  function planesHeight(width) { return PANEL_HEAD_H + planeHeaderHeight(width) + planeSize(width) + 60; }
+
+  // Each plane is titled with its state space, wrapped to at most two lines.
+  function planeSubtitle(role, width) {
+    const space = DATA.agents[role].stateSpace;
+    return wrap(space.caption + " (" + space.abbreviation + ")", SIZE.body, (width - LANE_W) / 2).slice(0, 2);
+  }
+  function planeHeaderHeight(width) {
+    const lines = Math.max.apply(null, roles.map(function (role) { return planeSubtitle(role, width).length; }));
+    return 70 + (lines - 1) * LINE_H;
+  }
+
+  // The dialogue column is sized for the whole interaction, not the selected
+  // turn, so the figure keeps its height while stepping.
+  function dialogueHeight() {
+    // At the current dialogueW, which cardLines wraps to.
+    let height = PANEL_HEAD_H;
+    turns.forEach(function (entry, index) {
+      height += cardHeight(entry) + (index ? CARD.gap : 0);
+    });
+    return Math.min(height, DIALOGUE_MAX_H);
+  }
+
+  function layout() {
+    const showDialogue = state.panels.has("dialogue") && hasTexts;
+    const showPlanes = state.panels.has("planes");
+    const showDimensions = state.panels.has("dimensions");
+
+    const legend = showPlanes || showDimensions;
+
+    // The right column: planes, charts over turns, and the legend under them.
+    // Everything but the charts has a height fixed by the column's width.
+    function rightFixedHeight(rightW) {
+      const planesH = showPlanes ? planesHeight(rightW) : 0;
+      const legendH = legend ? GAP + legendHeight(rightW) : 0;
+      return planesH + (showPlanes && showDimensions ? GAP : 0) + (showDimensions ? PANEL_HEAD_H : 0) + legendH;
+    }
+
+    // A wider dialogue is shorter and leaves the planes less room; a
+    // narrower one is taller. The share closest to the preferred one at which
+    // the charts, stretched to end level with the dialogue, keep a height
+    // between DIMENSIONS_H and DIMENSIONS_MAX_H is taken, so both columns end
+    // on one line. Without such a share the dialogue keeps the preferred
+    // width and the taller column sets the height.
+    if (showDialogue) {
+      const shares = [];
+      for (let share = DIALOGUE_SHARE.min; share <= DIALOGUE_SHARE.max + 1e-9; share += DIALOGUE_SHARE.step) {
+        shares.push(share);
+      }
+      shares.sort(function (a, b) {
+        return Math.abs(a - DIALOGUE_SHARE.preferred) - Math.abs(b - DIALOGUE_SHARE.preferred);
+      });
+      const fits = shares.find(function (share) {
+        dialogueW = Math.round(W * share);
+        const chartsH = dialogueHeight() - rightFixedHeight(W - dialogueW - GAP);
+        return showDimensions && chartsH >= DIMENSIONS_H && chartsH <= DIMENSIONS_MAX_H;
+      });
+      dialogueW = Math.round(W * (fits === undefined ? DIALOGUE_SHARE.preferred : fits));
+    }
+
+    const rightX = showDialogue ? dialogueW + GAP : 0;
+    const rightW = W - rightX;
+    const planesH = showPlanes ? planesHeight(rightW) : 0;
+    const legendH = legend ? GAP + legendHeight(rightW) : 0;
+    const fixedH = rightFixedHeight(rightW);
+    let height = fixedH + (showDimensions ? DIMENSIONS_H : 0);
+    if (showDialogue) { height = Math.max(height, dialogueHeight()); }
+
+    const boxes = {};
+    if (showDialogue) { boxes.dialogue = { x: 0, y: 0, w: dialogueW, h: height }; }
+    let y = 0;
+    if (showPlanes) { boxes.planes = { x: rightX, y: y, w: rightW, h: planesH }; y += planesH + (showDimensions ? GAP : 0); }
+    if (showDimensions) {
+      // Spare height, when the dialogue is the tallest column, goes to the
+      // charts, so both columns end on one line.
+      const chartsH = Math.max(DIMENSIONS_H, height - fixedH);
+      boxes.dimensions = { x: rightX, y: y, w: rightW, h: PANEL_HEAD_H + chartsH };
+      y += PANEL_HEAD_H + chartsH;
+    }
+    if (legend) { boxes.legend = { x: rightX, y: y + GAP, w: rightW, h: legendH - GAP }; }
+
+    return { boxes: boxes, height: height };
+  }
+
+  // ---------- panels ----------
+
+  const LINE_H = Math.round(SIZE.body * 1.25);
+
+  function cardLines(entry) {
+    const content = DATA.texts[String(entry.turn)];
+    return content ? wrap(content, SIZE.body, dialogueW * CARD.width - 2 * CARD.padding) : [];
+  }
+
+  function cardHeight(entry) {
+    return CARD.padding * 2 + CARD.header + Math.max(cardLines(entry).length, 1) * LINE_H;
+  }
+
+  function drawDialogue(svg, box) {
+    const group = node("g", {}, svg);
+    panelHead(group, box, "Dialogue");
+
+    const padding = CARD.padding;
+    const cardW = box.w * CARD.width;
+    const lineH = LINE_H;
+    const top = box.y + PANEL_HEAD_H;
+    const bottom = box.y + box.h;
+    const gap = CARD.gap;
+
+    // The newest turns are kept; earlier ones give way when the column is full.
+    const cards = visibleTurns().map(function (entry) {
+      return { entry: entry, lines: cardLines(entry), height: cardHeight(entry) };
+    });
+
+    const shown = [];
+    let used = 0;
+    for (let index = cards.length - 1; index >= 0; index -= 1) {
+      const needed = cards[index].height + (shown.length ? gap : 0);
+      if (used + needed > bottom - top - (index > 0 ? 30 : 0)) { break; }
+      shown.unshift(cards[index]);
+      used += needed;
+    }
+
+    let y = top;
+    const hidden = cards.length - shown.length;
+    if (hidden > 0) {
+      text(group, box.x, y + 18, (hidden === 1 ? "Turn 1" : "Turns 1–" + hidden) + " above, not shown", {
+        "font-size": SIZE.small, fill: P.muted, "font-style": "italic",
+      });
+      y += 30;
+    }
+
+    for (const card of shown) {
+      const role = card.entry.role;
+      const color = agentColor(role);
+      const current = card.entry.turn === state.turn;
+      const x = role === roles[0] ? box.x : box.x + box.w - cardW;
+
+      node("rect", {
+        x: x + 0.75, y: y + 0.75, width: cardW - 1.5, height: card.height - 1.5, rx: 12,
+        fill: current ? color : P.panel, "fill-opacity": current ? 0.08 : 1,
+        stroke: color, "stroke-width": current ? 2.5 : 1.5,
+      }, group);
+      // Only the name, the part of the label before the first comma or
+      // bracket: what steers the agent is said once, in the legend.
+      const header = fit([
+        card.entry.turn + "  Agent " + role + ": " + shortName(role),
+        card.entry.turn + "  Agent " + role,
+      ], SIZE.small, cardW - 2 * padding, "700");
+      text(group, x + padding, y + padding + 17, header, {
+        "font-size": SIZE.small, "font-weight": 700, fill: color,
+      });
+      if (card.lines.length) {
+        card.lines.forEach(function (line, index) {
+          text(group, x + padding, y + padding + CARD.header + (index + 1) * lineH - 6, line, { fill: P.text });
+        });
+      } else {
+        text(group, x + padding, y + padding + CARD.header + lineH - 6, "No text for this turn", {
+          fill: P.muted, "font-style": "italic",
+        });
+      }
+      y += card.height + gap;
+    }
+  }
+
+  function drawPlanes(svg, outer) {
+    const group = node("g", {}, svg);
+    const box = panelHead(group, outer, "State spaces");
+    const lane = LANE_W;
+    const blockW = (box.w - lane) / 2;
+    const plotTop = box.y + planeHeaderHeight(box.w);
+    const size = planeSize(box.w);
+    const frames = {};
+
+    roles.forEach(function (role, index) {
+      const x0 = box.x + index * (blockW + lane);
+      const space = DATA.agents[role].stateSpace;
+      text(group, x0, box.y + 22, fit([
+        "Agent " + role + ": " + shortName(role), "Agent " + role,
+      ], SIZE.title, blockW, "700"), {
+        "font-size": SIZE.title, "font-weight": 700, fill: agentColor(role),
+      });
+      planeSubtitle(role, box.w).forEach(function (line, index) {
+        text(group, x0, box.y + 50 + index * LINE_H, line, { fill: P.muted });
+      });
+      frames[role] = drawPlane(group, space, { x: x0 + 56, y: plotTop, size: size });
+    });
+
+    // The behavior of the selected turn, from where it was sent to where the
+    // converter delivered it in the partner's space.
+    const entry = turns.find(function (t) { return t.turn === state.turn; });
+    const from = frames[entry.role];
+    const to = frames[partnerOf(entry.role)];
+    const start = from.toScreen(planePoint(from.space, entry.sent.data));
+    const end = to.toScreen(planePoint(to.space, entry.received.data));
+    const color = agentColor(entry.role);
+    const mid = (start[0] + end[0]) / 2;
+    const lift = Math.min(start[1], end[1]) - 60;
+
+    node("path", {
+      d: "M" + start[0] + "," + start[1] + " C" + mid + "," + lift + " " + mid + "," + lift + " " + end[0] + "," + end[1],
+      fill: "none", stroke: color, "stroke-width": 2, "stroke-dasharray": "2 6", "stroke-linecap": "round",
+      "marker-end": "url(#arrow-" + entry.role + ")",
+    }, group);
+
+    // The lane names the conversion in both directions, on a halo, because
+    // the arrow above may cross it.
+    const halo = { stroke: P.panel, "stroke-width": 8, "stroke-linejoin": "round", "paint-order": "stroke" };
+    const laneX = box.x + blockW + lane / 2;
+    const laneY = plotTop + size / 2;
+    roles.forEach(function (role, index) {
+      const sample = turns.find(function (t) { return t.role === role; });
+      if (!sample) { return; }
+      const fromSpace = spaceById(sample.sent.stateSpace);
+      const toSpace = spaceById(sample.received.stateSpace);
+      const y = laneY + (index === 0 ? -34 : 46);
+      const arrow = index === 0 ? "→" : "←";
+      const active = entry.role === role;
+      text(group, laneX, y, fromSpace.abbreviation + " " + arrow + " " + toSpace.abbreviation, {
+        "text-anchor": "middle", "font-weight": 700, fill: active ? agentColor(role) : P.muted, ...halo,
+      });
+    });
+    text(group, laneX, laneY + 8, "converted", { "text-anchor": "middle", "font-size": SIZE.small, fill: P.muted, ...halo });
+
+    // Behaviors, oldest first, so the newest lie on top.
+    roles.forEach(function (role) {
+      const frame = frames[role];
+      const own = visibleTurns().filter(function (t) { return t.role === role; });
+      const partner = visibleTurns().filter(function (t) { return t.role !== role; });
+      drawPath(group, frame, partner.map(function (t) { return { turn: t.turn, data: t.received.data }; }), agentColor(partnerOf(role)), true);
+      drawPath(group, frame, own.map(function (t) { return { turn: t.turn, data: t.sent.data }; }), agentColor(role), false);
+      drawTurnLabels(group, frame, own.map(function (t) { return { turn: t.turn, data: t.sent.data, role: role }; })
+        .concat(partner.map(function (t) { return { turn: t.turn, data: t.received.data, role: t.role }; })));
+    });
+  }
+
+  function drawPlane(group, space, frame) {
+    const s = frame.size;
+    const cx = frame.x + s / 2;
+    const cy = frame.y + s / 2;
+    let toScreen;
+
+    if (space.system === "polar") {
+      const radiusDimension = space.dimensions.find(function (d) { return d.key === space.axes.radius; });
+      const maximum = radiusDimension.maximum;
+      const r = s / 2 - 30;
+      toScreen = function (point) { return [cx + point[0] / maximum * r, cy - point[1] / maximum * r]; };
+
+      node("circle", { cx: cx, cy: cy, r: r, fill: P.panel, stroke: P.muted, "stroke-width": 1.5 }, group);
+      node("circle", { cx: cx, cy: cy, r: r / 2, fill: "none", stroke: P.grid, "stroke-width": 1.2 }, group);
+      for (let degree = 0; degree < 360; degree += 45) {
+        const angle = degree * Math.PI / 180;
+        node("line", {
+          x1: cx, y1: cy, x2: cx + r * Math.cos(angle), y2: cy - r * Math.sin(angle),
+          stroke: P.grid, "stroke-width": degree % 90 === 0 ? 1.5 : 1,
+        }, group);
+      }
+      text(group, cx + r + 12, cy + 7, "0°", { "font-size": SIZE.small, fill: P.muted });
+      text(group, cx, cy - r - 12, "90°", { "font-size": SIZE.small, fill: P.muted, "text-anchor": "middle" });
+      text(group, cx - r - 12, cy + 7, "180°", { "font-size": SIZE.small, fill: P.muted, "text-anchor": "end" });
+      text(group, cx, cy + r + 26, "270°", { "font-size": SIZE.small, fill: P.muted, "text-anchor": "middle" });
+      // Centred under the circle, so it may use twice the room to its right.
+      const caption = fit([
+        "θ from communion toward agency, R from center",
+        "θ from communion, R from center",
+        "θ, R from center",
+      ], SIZE.small, 2 * (W - cx) - 8);
+      text(group, cx, frame.y + s + 34, caption, {
+        "font-size": SIZE.small, fill: P.muted, "text-anchor": "middle",
+      });
+    } else {
+      const dimension = function (key) { return space.dimensions.find(function (d) { return d.key === key; }); };
+      const xd = dimension(space.axes.x);
+      const yd = dimension(space.axes.y);
+      const discrete = space.type === "discrete";
+      const pad = discrete ? 0.5 : 0;
+      const xs = [xd.minimum - pad, xd.maximum + pad];
+      const ys = [yd.minimum - pad, yd.maximum + pad];
+      toScreen = function (point) {
+        return [
+          frame.x + (point[0] - xs[0]) / (xs[1] - xs[0]) * s,
+          frame.y + s - (point[1] - ys[0]) / (ys[1] - ys[0]) * s,
+        ];
+      };
+
+      node("rect", { x: frame.x, y: frame.y, width: s, height: s, fill: P.panel, stroke: P.muted, "stroke-width": 1.5 }, group);
+      if (discrete && xd.maximum - xd.minimum <= 12) {
+        for (let value = xd.minimum; value <= xd.maximum; value += 1) {
+          const p = toScreen([value, ys[0]]);
+          node("line", { x1: p[0], y1: frame.y, x2: p[0], y2: frame.y + s, stroke: P.grid, "stroke-width": 1 }, group);
+        }
+        for (let value = yd.minimum; value <= yd.maximum; value += 1) {
+          const p = toScreen([xs[0], value]);
+          node("line", { x1: frame.x, y1: p[1], x2: frame.x + s, y2: p[1], stroke: P.grid, "stroke-width": 1 }, group);
+        }
+      }
+      const xMid = (xd.minimum + xd.maximum) / 2;
+      const yMid = (yd.minimum + yd.maximum) / 2;
+      [xd.minimum, xMid, xd.maximum].forEach(function (value) {
+        const p = toScreen([value, ys[0]]);
+        text(group, p[0], frame.y + s + 22, String(value), { "font-size": SIZE.small, fill: P.muted, "text-anchor": "middle" });
+      });
+      [yd.minimum, yMid, yd.maximum].forEach(function (value) {
+        const p = toScreen([xs[0], value]);
+        text(group, frame.x - 8, p[1] + 6, String(value), { "font-size": SIZE.small, fill: P.muted, "text-anchor": "end" });
+      });
+      text(group, frame.x + s / 2, frame.y + s + 48, xd.caption + " (" + xd.key + ")", {
+        "font-size": SIZE.small, fill: P.body, "text-anchor": "middle",
+      });
+      const yLabel = text(group, 0, 0, yd.caption + " (" + yd.key + ")", {
+        "font-size": SIZE.small, fill: P.body, "text-anchor": "middle",
+      });
+      yLabel.setAttribute("transform", "translate(" + (frame.x - 34) + "," + (frame.y + s / 2) + ") rotate(-90)");
+    }
+
+    return { space: space, toScreen: toScreen };
+  }
+
+  function drawPath(group, frame, points, color, hollow) {
+    if (!points.length) { return; }
+    const screen = points.map(function (p) { return frame.toScreen(planePoint(frame.space, p.data)); });
+    if (screen.length > 1) {
+      node("polyline", {
+        points: screen.map(function (p) { return p.join(","); }).join(" "),
+        fill: "none", stroke: color, "stroke-width": 2, "stroke-opacity": 0.55,
+        "stroke-dasharray": hollow ? "7 6" : null, "stroke-linejoin": "round",
+      }, group);
+    }
+    screen.forEach(function (p, index) {
+      const newest = index === screen.length - 1;
+      const opacity = 0.35 + 0.65 * (index + 1) / screen.length;
+      node("circle", {
+        cx: p[0], cy: p[1], r: newest ? 11 : 8,
+        fill: hollow ? P.panel : color, "fill-opacity": hollow ? 1 : opacity,
+        stroke: color, "stroke-opacity": opacity, "stroke-width": hollow ? 2.5 : 1.5,
+      }, group);
+    });
+  }
+
+  // Turn numbers beside the markers. Behaviors that fall on the same point,
+  // common in a discrete space, share one label.
+  function drawTurnLabels(group, frame, points) {
+    const spots = new Map();
+    points.forEach(function (p) {
+      const screen = frame.toScreen(planePoint(frame.space, p.data));
+      const key = Math.round(screen[0]) + ":" + Math.round(screen[1]);
+      if (!spots.has(key)) { spots.set(key, { screen: screen, turns: [] }); }
+      spots.get(key).turns.push(p.turn);
+    });
+    // Each label takes the first of four places beside its marker that no
+    // earlier label occupies.
+    const placed = [];
+    const places = [[13, -10, "start"], [13, 24, "start"], [-13, -10, "end"], [-13, 24, "end"]];
+    spots.forEach(function (spot) {
+      spot.turns.sort(function (a, b) { return a - b; });
+      const content = spot.turns.join(", ");
+      // The halo drawn behind each label makes it wider than its glyphs.
+      const width = measure(content, SIZE.small, "600") + 8;
+      let chosen = places[0];
+      let rect = null;
+      for (const place of places) {
+        const left = spot.screen[0] + place[0] - (place[2] === "end" ? width : 0);
+        const candidate = { x: left, y: spot.screen[1] + place[1] - SIZE.small, w: width, h: SIZE.small + 2 };
+        const clash = placed.some(function (other) {
+          return candidate.x < other.x + other.w && other.x < candidate.x + candidate.w &&
+            candidate.y < other.y + other.h && other.y < candidate.y + candidate.h;
+        });
+        if (!clash) { chosen = place; rect = candidate; break; }
+      }
+      if (!rect) {
+        rect = { x: spot.screen[0] + chosen[0], y: spot.screen[1] + chosen[1] - SIZE.small, w: width, h: SIZE.small + 2 };
+      }
+      placed.push(rect);
+      text(group, spot.screen[0] + chosen[0], spot.screen[1] + chosen[1], content, {
+        "font-size": SIZE.small, fill: P.text, "font-weight": 600, "text-anchor": chosen[2],
+        stroke: P.panel, "stroke-width": 4, "paint-order": "stroke",
+      });
+    });
+  }
+
+  function drawDimensions(svg, outer) {
+    const group = node("g", {}, svg);
+    const space = spaceById(state.timeSpace);
+    const box = panelHead(group, outer, "Trajectories over turns");
+    const owner = roles.find(function (role) { return DATA.agents[role].stateSpace.id === space.id; });
+    const count = space.dimensions.length;
+    const chartGap = 40;
+    const chartW = (box.w - chartGap * (count - 1)) / count;
+
+    // The panel head names the space, so a chart title names its dimension.
+    const names = space.dimensions.map(function (d) { return d.caption + " (" + d.key + ")"; });
+
+    space.dimensions.forEach(function (dimension, index) {
+      const x0 = box.x + index * (chartW + chartGap);
+      const plot = { x: x0 + 56, y: box.y + 44, w: chartW - 66, h: box.h - 44 - 56 };
+      const caption = dimension.caption.toLowerCase();
+      const titleColor = caption === "agency" ? P.agency : caption === "communion" ? P.communion : P.text;
+      text(group, x0, box.y + 22, names[index], { "font-size": SIZE.title, "font-weight": 700, fill: titleColor });
+
+      const pad = space.type === "discrete" ? 0.5 : 0;
+      const yMin = dimension.minimum - pad;
+      const yMax = dimension.maximum + pad;
+      const toX = function (turn) { return plot.x + (turn - 0.5) / lastTurn * plot.w; };
+      const toY = function (value) { return plot.y + plot.h - (value - yMin) / (yMax - yMin) * plot.h; };
+
+      node("rect", { x: plot.x, y: plot.y, width: plot.w, height: plot.h, fill: P.panel, stroke: P.muted, "stroke-width": 1.5 }, group);
+      const mid = (dimension.minimum + dimension.maximum) / 2;
+      [dimension.minimum, mid, dimension.maximum].forEach(function (value) {
+        node("line", { x1: plot.x, y1: toY(value), x2: plot.x + plot.w, y2: toY(value), stroke: P.grid, "stroke-width": 1 }, group);
+        text(group, plot.x - 8, toY(value) + 6, String(value), { "font-size": SIZE.small, fill: P.muted, "text-anchor": "end" });
+      });
+      for (let turn = 1; turn <= lastTurn; turn += 1) {
+        text(group, toX(turn), plot.y + plot.h + 22, String(turn), { "font-size": SIZE.small, fill: P.muted, "text-anchor": "middle" });
+      }
+      text(group, plot.x + plot.w / 2, plot.y + plot.h + 48, "Turn", { "font-size": SIZE.small, fill: P.body, "text-anchor": "middle" });
+
+      node("line", {
+        x1: toX(state.turn), y1: plot.y, x2: toX(state.turn), y2: plot.y + plot.h,
+        stroke: P.muted, "stroke-width": 1.5, "stroke-dasharray": "3 4",
+      }, group);
+
+      // The owner of this space as it sent, the partner as it was converted.
+      // An angle is circular: it is undefined at radius 0, and a step across
+      // 0/360 is short, so the line breaks there instead of crossing the chart.
+      const isAngle = space.system === "polar" && dimension.key === space.axes.angle;
+      roles.forEach(function (role) {
+        const hollow = role !== owner;
+        let points = visibleTurns().filter(function (t) { return t.role === role; }).map(function (t) {
+          const values = hollow ? t.received : t.sent;
+          return { value: values.data[dimension.key], radius: isAngle ? values.data[space.axes.radius] : 1, turn: t.turn };
+        }).filter(function (p) { return p.radius > 0; }).map(function (p) {
+          return { xy: [toX(p.turn), toY(p.value)], value: p.value };
+        });
+        const color = agentColor(role);
+        const segments = [[]];
+        points.forEach(function (p, index) {
+          if (index > 0 && isAngle && Math.abs(p.value - points[index - 1].value) > 180) { segments.push([]); }
+          segments[segments.length - 1].push(p.xy);
+        });
+        segments.filter(function (segment) { return segment.length > 1; }).forEach(function (segment) {
+          node("polyline", {
+            points: segment.map(function (p) { return p.join(","); }).join(" "), fill: "none",
+            stroke: color, "stroke-width": 2, "stroke-dasharray": hollow ? "7 6" : null,
+          }, group);
+        });
+        points = points.map(function (p) { return p.xy; });
+        points.forEach(function (p) {
+          node("circle", {
+            cx: p[0], cy: p[1], r: 7, fill: hollow ? P.panel : color, stroke: color, "stroke-width": hollow ? 2.5 : 1.5,
+          }, group);
+        });
+      });
+    });
+  }
+
+  // Legend entries: a key drawn in 30 units, then its label. Entries flow
+  // into a second row when one row is not wide enough.
+  // The legend sits under the charts: one row per agent, its full label
+  // wrapped to the column, then the two marker kinds side by side.
+  function legendAgentLines(role, width) {
+    return wrap(agentName(role), SIZE.small, width - LEGEND_KEY);
+  }
+
+  const MARKERS = [
+    { label: "sent, in the agent's own state space", filled: true },
+    { label: "received, converted into this space", filled: false },
+  ];
+
+  // The marker kinds side by side where they fit, else one per row.
+  function markerRows(width) {
+    const rows = [[]];
+    let x = 0;
+    MARKERS.forEach(function (marker) {
+      const itemW = LEGEND_KEY + measure(marker.label, SIZE.small);
+      if (x > 0 && x + itemW > width) { rows.push([]); x = 0; }
+      rows[rows.length - 1].push({ marker: marker, x: x });
+      x += itemW + 40;
+    });
+    return rows;
+  }
+
+  function legendHeight(width) {
+    let rows = markerRows(width).length;
+    roles.forEach(function (role) { rows += legendAgentLines(role, width).length; });
+    return PANEL_HEAD_H + rows * LEGEND_ROW + 8;
+  }
+
+  function drawLegend(svg, outer) {
+    const group = node("g", {}, svg);
+    const box = panelHead(group, outer, "Legend");
+    let baseline = box.y + 24;
+    roles.forEach(function (role) {
+      node("line", { x1: box.x, y1: baseline - 8, x2: box.x + 30, y2: baseline - 8, stroke: agentColor(role), "stroke-width": 4 }, group);
+      legendAgentLines(role, box.w).forEach(function (line, index) {
+        text(group, box.x + LEGEND_KEY, baseline + index * LEGEND_ROW, line, { "font-size": SIZE.small, fill: P.text });
+      });
+      baseline += legendAgentLines(role, box.w).length * LEGEND_ROW;
+    });
+    markerRows(box.w).forEach(function (row) {
+      row.forEach(function (entry) {
+        const x = box.x + entry.x;
+        node("circle", {
+          cx: x + 15, cy: baseline - 8, r: 9,
+          fill: entry.marker.filled ? P.muted : P.panel, stroke: P.muted, "stroke-width": entry.marker.filled ? 0 : 2.5,
+        }, group);
+        text(group, x + LEGEND_KEY, baseline, entry.marker.label, { "font-size": SIZE.small, fill: P.text });
+      });
+      baseline += LEGEND_ROW;
+    });
+  }
+
+  // ---------- page ----------
+
+  const svg = document.getElementById("figure");
+
+  function draw() {
+    const plan = layout();
+    panelCount = 0;
+    while (svg.firstChild) { svg.removeChild(svg.firstChild); }
+    svg.setAttribute("viewBox", "0 0 " + W + " " + Math.max(plan.height, 1));
+    svg.setAttribute("font-family", FONT);
+
+    const defs = node("defs", {}, svg);
+    roles.forEach(function (role) {
+      const marker = node("marker", {
+        id: "arrow-" + role, viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse",
+      }, defs);
+      node("path", { d: "M0,0 L10,5 L0,10 z", fill: agentColor(role) }, marker);
+    });
+    node("rect", { x: 0, y: 0, width: W, height: plan.height, fill: "#FFFFFF" }, svg);
+
+    if (plan.boxes.dialogue) { drawDialogue(svg, plan.boxes.dialogue); }
+    if (plan.boxes.planes) { drawPlanes(svg, plan.boxes.planes); }
+    if (plan.boxes.dimensions) { drawDimensions(svg, plan.boxes.dimensions); }
+    if (plan.boxes.legend) { drawLegend(svg, plan.boxes.legend); }
+
+    describeTurn();
+  }
+
+  function describeTurn() {
+    const entry = turns.find(function (t) { return t.turn === state.turn; });
+    const partner = partnerOf(entry.role);
+    document.getElementById("turn-n").textContent = state.turn;
+    document.getElementById("turn-title").textContent = "Turn " + entry.turn + ": " + agentName(entry.role) + " acts";
+
+    const rows = [
+      ["Sent by agent " + entry.role, "<code>" + escape(formatValues(entry.sent.stateSpace, entry.sent.data)) + "</code> in " + escape(spaceById(entry.sent.stateSpace).abbreviation)],
+      ["Received by agent " + partner, "<code>" + escape(formatValues(entry.received.stateSpace, entry.received.data)) + "</code> in " + escape(spaceById(entry.received.stateSpace).abbreviation)],
+      ["Converter", entry.received.converter ? "<code>" + escape(entry.received.converter) + "</code>" : "none, both agents speak this space"],
+    ];
+    if (hasTexts) {
+      rows.push(["Text", escape(DATA.texts[String(entry.turn)] || "none for this turn")]);
+    }
+    document.getElementById("turn-table").innerHTML = rows.map(function (row) {
+      return "<tr><th>" + escape(row[0]) + "</th><td>" + row[1] + "</td></tr>";
+    }).join("");
+
+    const messages = document.getElementById("turn-messages");
+    messages.innerHTML = "";
+    ["original", "converted"].forEach(function (kind) {
+      const message = entry.messages[kind];
+      if (!message) { return; }
+      const holder = document.createElement("div");
+      const heading = document.createElement("h3");
+      heading.textContent = kind === "original" ? "As sent" : "As delivered";
+      const pre = document.createElement("pre");
+      pre.textContent = JSON.stringify(message, null, 2);
+      holder.appendChild(heading);
+      holder.appendChild(pre);
+      messages.appendChild(holder);
+    });
+
+    document.getElementById("slider").value = state.turn;
+    document.getElementById("prev").disabled = state.turn <= 1;
+    document.getElementById("next").disabled = state.turn >= lastTurn;
+  }
+
+  function escape(value) {
+    return String(value).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+
+  function show(turn) {
+    state.turn = Math.min(Math.max(turn, 1), lastTurn);
+    draw();
+  }
+
+  // ---------- export ----------
+
+  function serialize() {
+    const copy = svg.cloneNode(true);
+    const box = svg.viewBox.baseVal;
+    copy.setAttribute("xmlns", NS);
+    copy.setAttribute("width", String(box.width));
+    copy.setAttribute("height", String(box.height));
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(copy);
+  }
+
+  function save(blob, name) {
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () { URL.revokeObjectURL(link.href); }, 1000);
+  }
+
+  function fileStem() {
+    return "itp_interaction_" + (DATA.resultsFolder || "report") + "_turn" + state.turn;
+  }
+
+  function exportSvg() {
+    save(new Blob([serialize()], { type: "image/svg+xml" }), fileStem() + ".svg");
+  }
+
+  function exportPng() {
+    const box = svg.viewBox.baseVal;
+    const image = new Image();
+    image.onload = function () {
+      const canvas = document.createElement("canvas");
+      canvas.width = box.width * PNG_SCALE;
+      canvas.height = box.height * PNG_SCALE;
+      const context = canvas.getContext("2d");
+      context.fillStyle = "#FFFFFF";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(function (blob) { save(blob, fileStem() + ".png"); }, "image/png");
+    };
+    image.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(serialize());
+  }
+
+  // ---------- wiring ----------
+
+  document.title = DATA.title;
+  document.getElementById("title").textContent = DATA.title;
+  document.getElementById("lede-agents").textContent = roles.map(function (role) {
+    const agent = DATA.agents[role];
+    return agentName(role) + " (" + (agent.type === "human" ? "human" : "formal model") + ", " + agent.stateSpace.caption +
+      (agent.parameters ? "; " + describeParameters(agent.parameters) : "") + ")";
+  }).join("; ") + ".";
+  document.getElementById("lede-record").innerHTML = escape(lastTurn + " turns") +
+    (DATA.context ? ", context <code>" + escape(DATA.context) + "</code>" : "") +
+    (DATA.endReason ? ", ended by <code>" + escape(DATA.endReason) + "</code>" : "") +
+    (DATA.resultsFolder ? ". Record: <code>results/" + escape(DATA.resultsFolder) + "</code>" : "") + ".";
+  document.getElementById("lede-text").textContent = hasTexts
+    ? "Dialogue: " + (DATA.textSource || "supplied beside the record") + "."
+    : "No dialogue file was attached; the ITP record holds numbers only.";
+
+  const slider = document.getElementById("slider");
+  slider.max = String(lastTurn);
+  slider.addEventListener("input", function () { show(Number(slider.value)); });
+  document.getElementById("turn-max").textContent = lastTurn;
+  document.getElementById("prev").addEventListener("click", function () { show(state.turn - 1); });
+  document.getElementById("next").addEventListener("click", function () { show(state.turn + 1); });
+  document.addEventListener("keydown", function (event) {
+    if (event.target && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName) && event.target !== slider) { return; }
+    if (event.key === "ArrowLeft") { show(state.turn - 1); event.preventDefault(); }
+    if (event.key === "ArrowRight") { show(state.turn + 1); event.preventDefault(); }
+  });
+
+  document.querySelectorAll("#toggles input[data-panel]").forEach(function (box) {
+    const panel = box.dataset.panel;
+    box.checked = state.panels.has(panel) && (panel !== "dialogue" || hasTexts);
+    if (panel === "dialogue" && !hasTexts) {
+      box.disabled = true;
+      document.getElementById("label-dialogue").classList.add("off");
+      document.getElementById("label-dialogue").title = "No dialogue file was attached to this report.";
+    }
+    box.addEventListener("change", function () {
+      if (box.checked) { state.panels.add(panel); } else { state.panels.delete(panel); }
+      draw();
+    });
+  });
+
+  const select = document.getElementById("time-space");
+  const seen = new Set();
+  roles.forEach(function (role) {
+    const space = DATA.agents[role].stateSpace;
+    if (seen.has(space.id)) { return; }
+    seen.add(space.id);
+    const option = document.createElement("option");
+    option.value = space.id;
+    option.textContent = space.abbreviation;
+    select.appendChild(option);
+  });
+  select.value = state.timeSpace;
+  select.addEventListener("change", function () { state.timeSpace = select.value; draw(); });
+
+  document.getElementById("export-svg").addEventListener("click", exportSvg);
+  document.getElementById("export-png").addEventListener("click", exportPng);
+
+  draw();
+})();
+</script>
+</body>
+</html>
