@@ -201,7 +201,16 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
   }
 
   function text(parent, x, y, content, attrs) {
-    const element = node("text", Object.assign({ x: x, y: y, "font-size": SIZE.body, fill: P.body }, attrs || {}), parent);
+    const all = Object.assign({ x: x, y: y, "font-size": SIZE.body, fill: P.body }, attrs || {});
+    // A halo is its own element under the text: Word ignores paint-order, paints
+    // the stroke over the fill and loses the label in its own halo.
+    if (all["paint-order"] === "stroke" && all.stroke) {
+      const halo = Object.assign({}, all, { fill: all.stroke });
+      delete halo["paint-order"];
+      node("text", halo, parent).textContent = content;
+      ["stroke", "stroke-width", "stroke-linejoin", "paint-order"].forEach(function (key) { delete all[key]; });
+    }
+    const element = node("text", all, parent);
     element.textContent = content;
     return element;
   }
