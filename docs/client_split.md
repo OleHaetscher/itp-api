@@ -14,9 +14,12 @@ It will probably move into a separate repository. The cut happens later, on its
 own branch, after the port work is committed. Until then, nothing new should
 make the client depend on `src/` or on running from this checkout.
 
-How participants get the client is not decided: a hosted static page, a local
-copy each participant runs, or both. The API configuration below is to stay
-explicit enough for either.
+How participants get the client is not fully decided. Since 2026-11-09 it is
+also a hosted static page: `.github/workflows/pages.yml` publishes `ui/` to
+GitHub Pages, where the page defaults to the deployed API and asks for a key.
+The deployed gateway allows every origin, so a hosted copy needs no change to
+the API's CORS list. A local copy keeps working as before. The API
+configuration below is to stay explicit enough for both.
 
 ## What ties the client to this repository today
 

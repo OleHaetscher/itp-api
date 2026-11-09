@@ -1549,7 +1549,19 @@ async function fillInApiBaseUrl() {
   }
 }
 
-fillInApiBaseUrl().then(connect);
+// Opened locally (run_mock_ui), the page finds the local API and connects at
+// once. Opened anywhere else (GitHub Pages, or the file itself), it points at
+// the deployed API, which needs a key, so it waits for the user to enter one.
+const DEPLOYED_API_BASE_URL = "https://itp-api.uni-muenster.de";
+const LOCAL_HOSTNAMES = ["127.0.0.1", "localhost", "[::1]", "::1"];
+
+if (LOCAL_HOSTNAMES.includes(window.location.hostname)) {
+  fillInApiBaseUrl().then(connect);
+} else {
+  element("base-url").value = DEPLOYED_API_BASE_URL;
+  setHint("connect", "enter the API key, then load the catalogue");
+  element("api-key").focus();
+}
 </script>
 
 </body>
