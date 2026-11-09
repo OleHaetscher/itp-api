@@ -272,12 +272,15 @@ class BaseVisualizer(ABC):
     def panel(
         self,
         children: Any,
+        style: dict[str, str] | None = None,
     ) -> html.Div:
         """
         Wrap components in a styled panel.
 
         Args:
             children: Components shown inside the panel.
+            style: Optional style entries added to the panel's own, for
+                example to let it fill its column.
 
         Returns:
             Dash component holding the panel.
@@ -291,6 +294,7 @@ class BaseVisualizer(ABC):
                 "borderRadius": self.RADIUS,
                 "border": f"1px solid {self.GRID}",
                 "boxShadow": self.SHADOW,
+                **(style or {}),
             },
         )
 
