@@ -197,3 +197,7 @@ supports but which have not been tested with participants.
 | `docs/client_split.md` | The planned move of the browser client into its own repository |
 | `itp-api-flow.html` | The platform workflow step by step, with Figure 1 as its first section |
 | `itp-communication-flow.html` | How one ITP message passes through the codebase |
+
+## License
+
+CC BY 4.0 for the code, the specification, and the documentation; see `LICENSE`.
