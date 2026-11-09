@@ -110,7 +110,7 @@
       </div>
       <span class="sep"></span>
       <div class="group" id="toggles">
-        <label id="label-dialogue"><input type="checkbox" data-panel="dialogue" /> Dialogue</label>
+        <label id="label-dialogue"><input type="checkbox" data-panel="dialogue" /> Dialog</label>
         <label><input type="checkbox" data-panel="planes" /> State spaces</label>
         <label><input type="checkbox" data-panel="dimensions" /> Over turns in</label>
         <select id="time-space" aria-label="State space drawn over turns"></select>
@@ -134,7 +134,7 @@
   </div>
 
   <footer>
-    Written by <code>python -m src.run_interaction_report</code> from the ITP record alone; the dialogue, if shown,
+    Written by <code>python -m src.run_interaction_report</code> from the ITP record alone; the dialog, if shown,
     comes from a separate file joined on turn and role. Filled markers are behavior as sent, in the sender's own
     state space; hollow markers are the partner's behavior as the converter delivered it into this space.
     The PNG export is drawn at three times the figure's width, 600 dpi at the print width the report was written for.
@@ -416,7 +416,7 @@ const DATA = {"sessionId": "c953e8cd-1979-4bbe-a294-829f8c7fbff9", "resultsFolde
 
   function drawDialogue(svg, box) {
     const group = node("g", {}, svg);
-    panelHead(group, box, "Dialogue");
+    panelHead(group, box, "Dialog");
 
     const padding = CARD.padding;
     const cardW = box.w * CARD.width;
@@ -963,8 +963,8 @@ const DATA = {"sessionId": "c953e8cd-1979-4bbe-a294-829f8c7fbff9", "resultsFolde
     (DATA.endReason ? ", ended by <code>" + escape(DATA.endReason) + "</code>" : "") +
     (DATA.resultsFolder ? ". Record: <code>results/" + escape(DATA.resultsFolder) + "</code>" : "") + ".";
   document.getElementById("lede-text").textContent = hasTexts
-    ? "Dialogue: " + (DATA.textSource || "supplied beside the record") + "."
-    : "No dialogue file was attached; the ITP record holds numbers only.";
+    ? "Dialog: " + (DATA.textSource || "supplied beside the record") + "."
+    : "No dialog file was attached; the ITP record holds numbers only.";
 
   const slider = document.getElementById("slider");
   slider.max = String(lastTurn);
@@ -984,7 +984,7 @@ const DATA = {"sessionId": "c953e8cd-1979-4bbe-a294-829f8c7fbff9", "resultsFolde
     if (panel === "dialogue" && !hasTexts) {
       box.disabled = true;
       document.getElementById("label-dialogue").classList.add("off");
-      document.getElementById("label-dialogue").title = "No dialogue file was attached to this report.";
+      document.getElementById("label-dialogue").title = "No dialog file was attached to this report.";
     }
     box.addEventListener("change", function () {
       if (box.checked) { state.panels.add(panel); } else { state.panels.delete(panel); }
