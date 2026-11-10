@@ -175,3 +175,12 @@ Roughly in the order of what blocks what:
    with stand-ins), but they have not been tested with participants and are left out of the paper.
 5. **Interaction contexts** beyond a string, for example as dimensions such as status difference,
    familiarity, or sociality.
+6. **Visualizations on the deployed platform.** The LASSI dashboard (`run_lassi_visualization`)
+   runs only locally; the container holds the API alone. The paper therefore says the codebase
+   includes a visualization of the LASSI model, not that the platform serves one. Deploying the
+   dashboards next to the API would make them reachable for anyone with the link.
+7. **A seed for the dummy IPC model.** `DummyIPCFormalModel` starts from a random state drawn
+   without a seed, and the record does not store it, so its first state cannot be reproduced. This
+   holds for the example dialogs in `examples/interaction-report/`, and ESM 1 says so. Seed the
+   draw per agent (as `parameterSelection: random` already does for LASSI) and report the seed in
+   `interaction.json`.
