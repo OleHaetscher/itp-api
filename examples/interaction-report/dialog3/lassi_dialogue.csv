@@ -1,8 +1,8 @@
 turn,role,text
-1,A,"Daniel, relax. That wasn’t about you. I was talking about that viral video from this week, the one with the Bundesliga striker. If you think every joke about a missed shot is aimed at you, you’re taking things way too personally."
-2,B,"Oh, okay. I just… I guess I felt a bit weird since everyone at your table laughed and then looked over. Maybe I’m just a bit sensitive after Sunday. Sorry if I jumped to conclusions. If it really wasn’t about me, then that’s good."
-3,A,"No worries, man. I get it, Sunday was rough. Honestly, I didn’t even think about your chance, it was just a stupid video. If it made you feel weird, that wasn’t my intention at all. Next time I’ll try to keep it down with the jokes. Want a drink? My round."
-4,B,"Thanks, Lukas, that’s really nice of you. I appreciate it, honestly. I probably just need to chill a bit. If you’re sure it wasn’t about me, then I’m glad. Uh… yeah, I’ll have whatever you’re having, if that’s okay."
-5,A,"Of course, no problem. I’m having a Helles, so I’ll get you one too. And seriously, don’t worry about it. Everyone’s missed chances before, it’s part of the game. If you want to talk about Sunday, I’m happy to listen. Otherwise, let’s just enjoy the evening."
-6,B,"Thanks, that means a lot. I guess it just stuck with me, you know? But you’re right, it happens to everyone. I don’t want to drag the mood down, so... let’s just have a good evening. And thanks for being so cool about it."
-7,A,"You’re welcome, Daniel. Honestly, I get what you mean, those moments can really stick with you. But no one’s judging you, especially not me. Let’s just kick back and have a good night. If you ever want to talk football, or anything else, I’m around. Cheers, man."
+1,A,"No, Daniel, it wasn’t about you. It was about some Bundesliga guy from that viral video. If I wanted to talk about Sunday, I’d say it straight to your face."
+2,B,"Alright, if you say so. Just sounded pretty specific, considering what happened at our match. I’d rather you just say things directly if you’ve got something on your mind."
+3,A,"Look, I get why you’d think that, but I wasn’t even thinking about our match. If I had a problem, I wouldn’t go whispering about it behind your back. Next time, just ask before jumping to conclusions."
+4,B,"Fair enough, I can do that. I just wanted to clear it up, that’s all. Let’s leave it then. No hard feelings."
+5,A,Glad we sorted it out. No hard feelings from me either. Do you want a drink or are you heading out?
+6,B,"I’ll take a drink if you’re offering, thanks. No reason to leave just yet. What are you having?"
+7,A,"I’ve got a Helles right now. Want the same, or do you want something else? I’ll grab it from the bar."

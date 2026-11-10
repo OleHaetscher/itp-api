@@ -1,0 +1,33 @@
+{
+    "schema_version": "0.2",
+    "source_agent": {
+        "id": "b0ef725b-20e0-47ce-9608-01ba32acb0f8",
+        "state_space": "ipc",
+        "analysis_unit": "monadic"
+    },
+    "target_agent": {
+        "id": "723718fb-4886-47e7-92fb-e6ef6e1bec57",
+        "state_space": "ac",
+        "analysis_unit": "monadic"
+    },
+    "timecode": {
+        "timestamp": "4:02",
+        "interaction_turn": 4,
+        "api_turn": 8,
+        "iso_timestamp": "2026-11-10T09:57:38Z"
+    },
+    "values": {
+        "state_space": "ipc",
+        "analysis_unit": "monadic",
+        "data": {
+            "Theta": 352.8780501954686,
+            "R": 0.6335571831116893
+        }
+    },
+    "context": "workplace_colleague_conversation",
+    "metadata": {
+        "session_id": "1d2157ec-da5f-45a5-b871-5d1032bc547a",
+        "agent_role": "B",
+        "agent_type": "model"
+    }
+}
