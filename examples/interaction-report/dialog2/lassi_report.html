@@ -473,7 +473,12 @@ const DATA = {"sessionId": "6b35ec94-6d21-421b-bf54-5f2e14d5c9be", "resultsFolde
           text(group, x + padding, y + padding + CARD.header + (index + 1) * lineH - 6, line, { fill: P.text });
         });
       } else {
-        text(group, x + padding, y + padding + CARD.header + lineH - 6, "No text for this turn", {
+        // A model's last turn without text is the state it set for a message the
+        // ended dialog never sent (an agent whose partner opened the dialog ends one
+        // message later than the dialog); any other missing text is just missing.
+        const agent = DATA.agents && DATA.agents[role];
+        const unsent = card.entry.turn === lastTurn && agent && agent.type === "model" && DATA.status !== "running";
+        text(group, x + padding, y + padding + CARD.header + lineH - 6, unsent ? "Not sent: the dialog had ended" : "No text for this turn", {
           fill: P.muted, "font-style": "italic",
         });
       }
