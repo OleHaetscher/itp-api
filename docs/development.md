@@ -147,7 +147,8 @@ not a rounding question.
 
 The other files cover the API (`test_api_interactions.py`: two models in one interaction, ending
 early, the record, the restart answer, actions without a turn, the cursor, recovery by
-`clientRequestId`), model parameters (`test_model_parameters.py`), the interaction report
+`clientRequestId`), model parameters (`test_model_parameters.py`), model seeds (`test_model_seeds.py`: reported for every
+model agent, absent for a human, repeating LASSI's draws and a dummy model's start), the interaction report
 (`test_interaction_report.py`), and the port policy (`test_ports.py`).
 
 ## Planned work

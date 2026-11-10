@@ -19,7 +19,11 @@ it:
 
 A merged commit is therefore live only after both pipelines have run. Since 2026-11-01 the live
 server runs `main` with PR #4: actions take an optional `turn` and return a `cursor`, and LASSI
-publishes its `parameterSpace` (checked with a seeded LASSI interaction against the gateway). Check
+publishes its `parameterSpace` (checked with a seeded LASSI interaction against the gateway). Since
+2026-11-10 `main` also reports every model agent's `modelSeed` (PR #6); that build was not yet
+deployed on that day. `modelSeed` does not appear in `/docs/openapi.json`, because the responses
+are untyped there, so check a release like this one with an interaction against the gateway (the
+creation response names `modelSeed` for every model agent). For other changes, check
 `/docs/openapi.json` before pointing a client at features newer than the last build.
 
 The image (`Dockerfile`) holds `src/`, `schema/` and `configs/` only. It runs
@@ -43,12 +47,19 @@ A release that clients depend on takes these steps, in this order:
    runs started from `dev/apikey`).
 4. Check `https://itp-api.uni-muenster.de/docs/openapi.json` for the change before telling a
    client it is live. A redeploy drops every running interaction (see below).
+5. Tag the merge commit on GitHub and publish a release with notes on what changed for clients.
 
 PerTRAIN's `ITPGenerator` (`personalization-backend`) depends on two releases. Its actions need the
 one that made `turn` optional and returns the action `cursor` (on `main` since 2026-10-27). Its
 parameter fields need the one that adds `parameterSpace`. Against an older server, a
 `configuration` is accepted and silently ignored. On the PerTRAIN side, `perchat-deployment` does
 not yet pass an `ITP_API_KEY` to the app container.
+
+## The hosted browser client
+
+`.github/workflows/pages.yml` publishes `ui/` to `https://olehaetscher.github.io/itp-api/` on every
+push to `main` that touches `ui/`. Opened there, the page fills in the deployed API and waits for
+a key. It needs nothing from the deployment: the gateway answers every origin.
 
 ## What the deployment still lacks
 

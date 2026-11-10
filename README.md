@@ -67,8 +67,10 @@ space and implements how it integrates input and generates output. Two dummy mod
 and one in `sasb`, average their state with what they receive. `LASSIFormalModel` is the model of
 LLM-based agent simulations for modeling individual differences in social interactions (LASSI), in
 `ac` with 1 to 7 on each axis. Its behavioral default (`BD`) and reactivity (`IR`) can be set per agent and
-per interaction, by hand or as a seeded random draw. An external model stays on its own infrastructure
-and takes part through the web API, like a human client.
+per interaction, by hand or as a seeded random draw. Each model agent also reports the seed of its
+own random draws (`modelSeed`), which the record keeps; setting it from a request is planned. An
+external model stays on its own infrastructure and takes part through the web API, like a human
+client.
 
 The design of the API and its extensions to the specification are in `docs/api_design.md`. The
 deployed platform runs at `https://itp-api.uni-muenster.de`; `docs/deployment.md` describes how a
@@ -89,7 +91,9 @@ a conflict in a bar between two agents, one steered by LASSI and one by the dumm
 Two **example clients** show how other applications connect:
 
 - `ui/`, a browser client that exposes every step of the API and logs each request and response.
-  It runs interactions with any hosted model, as a participant or between two models.
+  It runs interactions with any hosted model, as a participant or between two models. It is also
+  hosted at `https://olehaetscher.github.io/itp-api/`, where it connects to the deployed platform
+  with an API key.
 - `examples/itp-api-basic-web-client/`, a minimal participant-facing web application for one
   paradigm: LASSI against a person who places points in the circumplex. It keeps the API key and
   the interaction token on its own server and runs against the deployed platform.
