@@ -1,0 +1,62 @@
+{
+    "sessionId": "6b35ec94-6d21-421b-bf54-5f2e14d5c9be",
+    "clientRequestId": "a799b2ab-d5ea-49e8-9536-305fa143991c",
+    "model": {
+        "id": "lassi",
+        "version": "0.2.0"
+    },
+    "numberOfTurns": 200,
+    "startingAgentRole": "A",
+    "context": "workplace_colleague_conversation",
+    "agents": {
+        "A": {
+            "agentId": "3899f798-8293-4518-81f5-eeaa521e94c1",
+            "role": "A",
+            "type": "human",
+            "registrationStatus": "registered",
+            "displayName": "User",
+            "stateSpace": "ac",
+            "model": null
+        },
+        "B": {
+            "agentId": "dd5ea2ed-feb3-4621-a029-d52fe3455b01",
+            "role": "B",
+            "type": "model",
+            "registrationStatus": "registered",
+            "displayName": "Model",
+            "stateSpace": "ac",
+            "model": {
+                "id": "lassi",
+                "version": "0.2.0",
+                "name": "LASSI agency-communion model"
+            },
+            "parameters": {
+                "selection": "default",
+                "randomSeed": null,
+                "explicit": [
+                    "A.BD",
+                    "A.IR",
+                    "C.BD",
+                    "C.IR"
+                ],
+                "values": {
+                    "A": {
+                        "BD": 3.5,
+                        "IR": 0.8
+                    },
+                    "C": {
+                        "BD": 5.0,
+                        "IR": 0.8
+                    }
+                }
+            }
+        }
+    },
+    "createdAt": "2026-11-10T09:15:14Z",
+    "status": "terminated",
+    "startedAt": "2026-11-10T09:15:14Z",
+    "endedAt": "2026-11-10T09:15:46Z",
+    "endReason": "terminatedByClient",
+    "finalTurn": 9,
+    "itpMessageCount": 8
+}
