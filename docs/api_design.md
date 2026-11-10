@@ -239,10 +239,24 @@ exactly as the specification describes.
 | `model` on every agent | The model the agent runs, as `{id, version, name}`, or `null` for a human. In the status, creation, join and results responses. |
 | `parameterSpace` on a model definition | The parameters an interaction may choose per agent, with range and default, and the ones every agent runs with (`fixed`). `null` for a model without any. See *Model parameters*. |
 | `parameters` on a model agent | What the agent runs with: `selection`, `randomSeed`, the parameters set `explicit`ly, and the `values`. Only for a model with a `parameterSpace`. |
+| `modelSeed` on a model agent | The seed of the model's own random draws (LASSI's draw of the expressed state, a dummy model's starting state), drawn by the server for every model agent. See *Model seeds*. |
 
 The specification already lets a model agent carry a model-specific
 `configuration`; what it may contain is defined here, under *Model parameters*,
 and anything else is refused.
+
+## Model seeds
+
+Every model agent runs its model on a seed of its own, drawn by the registry
+when the model is instantiated (`InteractionRegistry._instantiate_model`) and
+passed to the factory as `random_seed`. LASSI uses it for the generator that
+draws the expressed state on every axis, the dummy models for their random
+starting state. The agent reports it as `modelSeed` wherever the agent appears
+and in `interaction.json`, so the model side of a recorded run can be repeated:
+the same seed and the same inputs give the same states
+(`tests/test_model_seeds.py`). It is separate from the `randomSeed` of a
+parameter draw. A client cannot set it yet; a request field for it is the
+natural next step if runs are to be repeated through the API.
 
 ## Model parameters
 

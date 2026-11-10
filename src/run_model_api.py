@@ -47,6 +47,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 def make_dummy_ipc_model(
     agent_id: str,
     parameters: dict[str, dict[str, float]] | None = None,
+    random_seed: int | None = None,
 ) -> BaseFormalModel:
     """
     Create a dummy IPC model instance for one agent.
@@ -57,17 +58,19 @@ def make_dummy_ipc_model(
     Args:
         agent_id: Identifier of the agent the instance belongs to.
         parameters: Unused; the dummy model has no parameter space.
+        random_seed: Seed of the model's random starting state.
 
     Returns:
         Formal model instance.
     """
 
-    return DummyIPCFormalModel(model_id=agent_id)
+    return DummyIPCFormalModel(model_id=agent_id, random_seed=random_seed)
 
 
 def make_dummy_sasb_model(
     agent_id: str,
     parameters: dict[str, dict[str, float]] | None = None,
+    random_seed: int | None = None,
 ) -> BaseFormalModel:
     """
     Create a dummy SASB model instance for one agent.
@@ -75,17 +78,19 @@ def make_dummy_sasb_model(
     Args:
         agent_id: Identifier of the agent the instance belongs to.
         parameters: Unused; the dummy model has no parameter space.
+        random_seed: Seed of the model's random starting state.
 
     Returns:
         Formal model instance.
     """
 
-    return DummySASBFormalModel(model_id=agent_id)
+    return DummySASBFormalModel(model_id=agent_id, random_seed=random_seed)
 
 
 def make_lassi_model(
     agent_id: str,
     parameters: dict[str, dict[str, float]] | None = None,
+    random_seed: int | None = None,
 ) -> BaseFormalModel:
     """
     Create a LASSI agency-communion model instance for one agent.
@@ -93,12 +98,17 @@ def make_lassi_model(
     Args:
         agent_id: Identifier of the agent the instance belongs to.
         parameters: BD and IR per axis, merged into the configured parameters.
+        random_seed: Seed of the draws of the expressed state.
 
     Returns:
         Formal model instance.
     """
 
-    return LASSIFormalModel(model_id=agent_id, parameters=lassi_parameters_with(parameters))
+    return LASSIFormalModel(
+        model_id=agent_id,
+        parameters=lassi_parameters_with(parameters),
+        random_seed=random_seed,
+    )
 
 
 def make_catalogue() -> ModelCatalogue:

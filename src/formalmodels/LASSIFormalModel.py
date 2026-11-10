@@ -439,6 +439,7 @@ class LASSIAxis:
         self,
         dimension: str,
         parameters: dict[str, Any],
+        rng: np.random.Generator | None = None,
     ) -> None:
         """
         Initialize a LASSI interpersonal axis.
@@ -454,11 +455,14 @@ class LASSIAxis:
         Args:
             dimension: Axis abbreviation.
             parameters: Axis parameters, as returned by load_lassi_parameters.
+            rng: Random generator for drawing the expressed state; an unseeded
+                one if None.
 
         Returns:
         """
 
         self.dimension = dimension
+        self.rng = rng if rng is not None else np.random.default_rng()
         self.name = parameters["name"]
 
         self.num_states = int(parameters["num_states"])
@@ -869,7 +873,7 @@ class LASSIAxis:
         if self.deterministic:
             index = int(np.argmax(self.state_dist))
         else:
-            index = int(np.random.choice(self.num_states, p=self.state_dist))
+            index = int(self.rng.choice(self.num_states, p=self.state_dist))
 
         return float(self.state_grid[index])
 
@@ -981,6 +985,7 @@ class LASSIFormalModel(BaseFormalModel):
         model_id: str,
         dimensions: tuple[str, ...] = ("A", "C"),
         parameters: dict[str, dict[str, Any]] | None = None,
+        random_seed: int | None = None,
     ) -> None:
         """
         Initialize a LASSI formal model.
@@ -992,11 +997,16 @@ class LASSIFormalModel(BaseFormalModel):
             model_id: Identifier of the formal model.
             dimensions: Interpersonal dimensions used by the model.
             parameters: Optional axis parameters, overriding the config.
+            random_seed: Seed of the generator that draws the expressed state
+                on every axis (in axis order), so a run can be repeated; None
+                for an unseeded generator.
 
         Returns:
         """
 
         self.model_id = model_id
+        self.random_seed = random_seed
+        self.rng = np.random.default_rng(random_seed)
         self.state_space = "ac"
         self.analysis_unit = "monadic"
         self.dimensions = dimensions
@@ -1015,6 +1025,7 @@ class LASSIFormalModel(BaseFormalModel):
             dimension: LASSIAxis(
                 dimension=dimension,
                 parameters=parameters[dimension],
+                rng=self.rng,
             )
             for dimension in self.dimensions
         }

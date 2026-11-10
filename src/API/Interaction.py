@@ -114,6 +114,8 @@ class AgentSlot:
         model_entry: Catalogue entry of the model, for agents of type "model".
         parameters: Selection, seed and values of the model parameters the
             agent runs with, for a model with a parameter space.
+        model_seed: Seed of the model's own random draws (a starting state, a
+            sampled expressed state), for agents of type "model".
         model: Formal model instance, for agents of type "model".
         registration_status: Whether the agent is registered.
         participant: Participant registered for the agent.
@@ -132,6 +134,7 @@ class AgentSlot:
     configuration: dict[str, Any] | None = None
     model_entry: ModelEntry | None = None
     parameters: dict[str, Any] | None = None
+    model_seed: int | None = None
     model: BaseFormalModel | None = None
     registration_status: str = "pending"
     participant: dict[str, Any] | None = None
@@ -210,6 +213,11 @@ class AgentSlot:
         # parameters this agent ran with and how they were chosen.
         if self.parameters is not None:
             description["parameters"] = self.parameters
+
+        # Every model agent, with or without a parameter space: the seed that
+        # repeats the model's own draws given the same inputs.
+        if self.model_seed is not None:
+            description["modelSeed"] = self.model_seed
 
         return description
 

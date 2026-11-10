@@ -71,8 +71,9 @@ class ModelEntry:
         name: Readable model name.
         description: Readable model description.
         model_factory: Callable producing a fresh model instance per agent,
-            from the agent id and the parameter values the agent runs with
-            (None for a model without a parameter space).
+            from the agent id, the parameter values the agent runs with (None
+            for a model without a parameter space), and the seed of the
+            model's own random draws.
         state_space: ITP state space identifier the model works in.
         status: Availability of the model for new interactions.
         supported_agent_types: Agent types the model can be paired with.
@@ -88,7 +89,7 @@ class ModelEntry:
     version: str
     name: str
     description: str
-    model_factory: Callable[[str, dict[str, dict[str, float]] | None], BaseFormalModel]
+    model_factory: Callable[[str, dict[str, dict[str, float]] | None, int | None], BaseFormalModel]
     state_space: str
     status: str = "available"
     supported_agent_types: tuple[str, ...] = AGENT_TYPES
@@ -160,6 +161,7 @@ class ModelEntry:
         self,
         agent_id: str,
         parameters: dict[str, dict[str, float]] | None = None,
+        random_seed: int | None = None,
     ) -> BaseFormalModel:
         """
         Create a fresh model instance for one agent.
@@ -168,12 +170,14 @@ class ModelEntry:
             agent_id: Identifier of the agent the instance belongs to.
             parameters: Parameter values the agent runs with, keyed by group,
                 then by name; None for the model's defaults.
+            random_seed: Seed of the model's own random draws (a starting
+                state, a sampled expressed state); None for unseeded draws.
 
         Returns:
             Formal model instance.
         """
 
-        model = self.model_factory(agent_id, parameters)
+        model = self.model_factory(agent_id, parameters, random_seed)
         model.validate_model_interface()
 
         if model.state_space != self.state_space:

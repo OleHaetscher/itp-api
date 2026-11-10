@@ -179,8 +179,7 @@ Roughly in the order of what blocks what:
    runs only locally; the container holds the API alone. The paper therefore says the codebase
    includes a visualization of the LASSI model, not that the platform serves one. Deploying the
    dashboards next to the API would make them reachable for anyone with the link.
-7. **A seed for the dummy IPC model.** `DummyIPCFormalModel` starts from a random state drawn
-   without a seed, and the record does not store it, so its first state cannot be reproduced. This
-   holds for the example dialogs in `examples/interaction-report/`, and ESM 1 says so. Seed the
-   draw per agent (as `parameterSelection: random` already does for LASSI) and report the seed in
-   `interaction.json`.
+7. **Setting the model seed from a request.** Every model agent now runs on a seed the server
+   draws and reports as `modelSeed` (`api_design.md`, *Model seeds*), so the model side of a
+   recorded run can be repeated in Python. Repeating it through the API needs a request field for
+   the seed.
