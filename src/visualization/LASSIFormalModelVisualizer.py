@@ -189,6 +189,7 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
             ),
             style={"marginTop": "18px"},
         )
+        details.id = "readout-strip"
 
         return html.Div([columns, details])
 
@@ -257,7 +258,7 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
                 marks=self.state_marks(num_states=num_states),
             ),
             self.slider(
-                label="IR — signed interpersonal reactivity",
+                label="IR — interpersonal reactivity",
                 slider_id="IR",
                 minimum=-1.0,
                 maximum=1.0,

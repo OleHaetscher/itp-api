@@ -197,6 +197,7 @@ class BaseVisualizer(ABC):
             ),
             html.Div(
                 self.description,
+                id="page-description",
                 style={
                     "color": self.MUTED,
                     "fontSize": "15px",
