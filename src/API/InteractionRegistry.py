@@ -21,6 +21,7 @@ that record is also written to disk.
 from __future__ import annotations
 
 import json
+import random
 import threading
 import time
 from dataclasses import dataclass
@@ -1059,10 +1060,15 @@ class InteractionRegistry:
                 ),
             )
 
+        # Drawn here and kept on the agent, so the record names the seed of the
+        # model's own random draws and the model side of a run can be repeated.
+        agent.model_seed = random.SystemRandom().randrange(2**31)
+
         try:
             return model_entry.create_model(
                 agent_id=agent.agent_id,
                 parameters=(agent.parameters or {}).get("values"),
+                random_seed=agent.model_seed,
             )
         except (TypeError, ValueError) as error:
             raise ProblemDetail(

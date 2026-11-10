@@ -175,3 +175,11 @@ Roughly in the order of what blocks what:
    with stand-ins), but they have not been tested with participants and are left out of the paper.
 5. **Interaction contexts** beyond a string, for example as dimensions such as status difference,
    familiarity, or sociality.
+6. **Visualizations on the deployed platform.** The LASSI dashboard (`run_lassi_visualization`)
+   runs only locally; the container holds the API alone. The paper therefore says the codebase
+   includes a visualization of the LASSI model, not that the platform serves one. Deploying the
+   dashboards next to the API would make them reachable for anyone with the link.
+7. **Setting the model seed from a request.** Every model agent now runs on a seed the server
+   draws and reports as `modelSeed` (`api_design.md`, *Model seeds*), so the model side of a
+   recorded run can be repeated in Python. Repeating it through the API needs a request field for
+   the seed.

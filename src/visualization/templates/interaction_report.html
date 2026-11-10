@@ -110,7 +110,7 @@
       </div>
       <span class="sep"></span>
       <div class="group" id="toggles">
-        <label id="label-dialogue"><input type="checkbox" data-panel="dialogue" /> Dialogue</label>
+        <label id="label-dialogue"><input type="checkbox" data-panel="dialogue" /> Dialog</label>
         <label><input type="checkbox" data-panel="planes" /> State spaces</label>
         <label><input type="checkbox" data-panel="dimensions" /> Over turns in</label>
         <select id="time-space" aria-label="State space drawn over turns"></select>
@@ -134,7 +134,7 @@
   </div>
 
   <footer>
-    Written by <code>python -m src.run_interaction_report</code> from the ITP record alone; the dialogue, if shown,
+    Written by <code>python -m src.run_interaction_report</code> from the ITP record alone; the dialog, if shown,
     comes from a separate file joined on turn and role. Filled markers are behavior as sent, in the sender's own
     state space; hollow markers are the partner's behavior as the converter delivered it into this space.
     The PNG export is drawn at three times the figure's width, 600 dpi at the print width the report was written for.
@@ -201,7 +201,16 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
   }
 
   function text(parent, x, y, content, attrs) {
-    const element = node("text", Object.assign({ x: x, y: y, "font-size": SIZE.body, fill: P.body }, attrs || {}), parent);
+    const all = Object.assign({ x: x, y: y, "font-size": SIZE.body, fill: P.body }, attrs || {});
+    // A halo is its own element under the text: Word ignores paint-order, paints
+    // the stroke over the fill and loses the label in its own halo.
+    if (all["paint-order"] === "stroke" && all.stroke) {
+      const halo = Object.assign({}, all, { fill: all.stroke });
+      delete halo["paint-order"];
+      node("text", halo, parent).textContent = content;
+      ["stroke", "stroke-width", "stroke-linejoin", "paint-order"].forEach(function (key) { delete all[key]; });
+    }
+    const element = node("text", all, parent);
     element.textContent = content;
     return element;
   }
@@ -407,7 +416,7 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
 
   function drawDialogue(svg, box) {
     const group = node("g", {}, svg);
-    panelHead(group, box, "Dialogue");
+    panelHead(group, box, "Dialog");
 
     const padding = CARD.padding;
     const cardW = box.w * CARD.width;
@@ -464,7 +473,12 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
           text(group, x + padding, y + padding + CARD.header + (index + 1) * lineH - 6, line, { fill: P.text });
         });
       } else {
-        text(group, x + padding, y + padding + CARD.header + lineH - 6, "No text for this turn", {
+        // A model's last turn without text is the state it set for a message the
+        // ended dialog never sent (an agent whose partner opened the dialog ends one
+        // message later than the dialog); any other missing text is just missing.
+        const agent = DATA.agents && DATA.agents[role];
+        const unsent = card.entry.turn === lastTurn && agent && agent.type === "model" && DATA.status !== "running";
+        text(group, x + padding, y + padding + CARD.header + lineH - 6, unsent ? "Not sent: the dialog had ended" : "No text for this turn", {
           fill: P.muted, "font-style": "italic",
         });
       }
@@ -954,8 +968,8 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
     (DATA.endReason ? ", ended by <code>" + escape(DATA.endReason) + "</code>" : "") +
     (DATA.resultsFolder ? ". Record: <code>results/" + escape(DATA.resultsFolder) + "</code>" : "") + ".";
   document.getElementById("lede-text").textContent = hasTexts
-    ? "Dialogue: " + (DATA.textSource || "supplied beside the record") + "."
-    : "No dialogue file was attached; the ITP record holds numbers only.";
+    ? "Dialog: " + (DATA.textSource || "supplied beside the record") + "."
+    : "No dialog file was attached; the ITP record holds numbers only.";
 
   const slider = document.getElementById("slider");
   slider.max = String(lastTurn);
@@ -975,7 +989,7 @@ const DATA = /*__ITP_REPORT_DATA__*/null;
     if (panel === "dialogue" && !hasTexts) {
       box.disabled = true;
       document.getElementById("label-dialogue").classList.add("off");
-      document.getElementById("label-dialogue").title = "No dialogue file was attached to this report.";
+      document.getElementById("label-dialogue").title = "No dialog file was attached to this report.";
     }
     box.addEventListener("change", function () {
       if (box.checked) { state.panels.add(panel); } else { state.panels.delete(panel); }

@@ -67,7 +67,7 @@ space and implements how it integrates input and generates output. Two dummy mod
 and one in `sasb`, average their state with what they receive. `LASSIFormalModel` is the model of
 LLM-based agent simulations for modeling individual differences in social interactions (LASSI), in
 `ac` with 1 to 7 on each axis. Its behavioral default (`BD`) and reactivity (`IR`) can be set per agent and
-per interaction, by hand or as a seeded random draw. A remote model stays on its own infrastructure
+per interaction, by hand or as a seeded random draw. An external model stays on its own infrastructure
 and takes part through the web API, like a human client.
 
 The design of the API and its extensions to the specification are in `docs/api_design.md`. The
@@ -197,3 +197,7 @@ supports but which have not been tested with participants.
 | `docs/client_split.md` | The planned move of the browser client into its own repository |
 | `itp-api-flow.html` | The platform workflow step by step, with Figure 1 as its first section |
 | `itp-communication-flow.html` | How one ITP message passes through the codebase |
+
+## License
+
+CC BY 4.0 for the code, the specification, and the documentation; see `LICENSE`.

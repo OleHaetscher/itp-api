@@ -117,19 +117,24 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
         self,
     ) -> html.Div:
         """
-        Build the three-column dashboard body.
+        Build the dashboard body: three columns (controls, two figures, two
+        figures) and, under them, one strip with the readout and the model.
+
+        The readout sits under the figures and not under the sliders, so the
+        controls column ends level with the figure columns.
 
         Args:
 
         Returns:
-            Dash component holding the controls and the four figures.
+            Dash component holding the controls, the four figures, and the
+            readout.
         """
 
-        return html.Div(
+        columns = html.Div(
             [
                 html.Div(
-                    self.panel(self.build_controls()),
-                    style={"flex": "0 0 360px"},
+                    self.panel(self.build_controls(), style={"flex": "1"}),
+                    style={"flex": "0 0 360px", "display": "flex", "flexDirection": "column"},
                 ),
                 html.Div(
                     [
@@ -152,8 +157,41 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
                     style={"flex": "1 1 0", "minWidth": "0"},
                 ),
             ],
-            style={"display": "flex", "gap": "18px", "alignItems": "flex-start"},
+            style={"display": "flex", "gap": "18px", "alignItems": "stretch"},
         )
+
+        details = self.panel(
+            html.Div(
+                [
+                    html.Div(
+                        [self.heading("Readout"), html.Div(id="readout")],
+                    ),
+                    html.Div(
+                        [
+                            self.heading("Model"),
+                            self.model_caption(),
+                            self.caption(
+                                {
+                                    "states shown": "1 … N on the ITP scale",
+                                    "BD": "strictly inside (1, N)",
+                                    "clipping": "none, by construction",
+                                }
+                            ),
+                        ],
+                    ),
+                ],
+                style={
+                    "display": "grid",
+                    "gridTemplateColumns": "repeat(auto-fit, minmax(300px, 420px))",
+                    "columnGap": "48px",
+                    "rowGap": "18px",
+                },
+            ),
+            style={"marginTop": "18px"},
+        )
+        details.id = "readout-strip"
+
+        return html.Div([columns, details])
 
     def build_controls(
         self,
@@ -220,7 +258,7 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
                 marks=self.state_marks(num_states=num_states),
             ),
             self.slider(
-                label="IR — signed interpersonal reactivity",
+                label="IR — interpersonal reactivity",
                 slider_id="IR",
                 minimum=-1.0,
                 maximum=1.0,
@@ -261,18 +299,6 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
                 step=2,
                 value=num_states,
                 marks={3: "3", 7: "7", 11: "11", 15: "15"},
-            ),
-            html.Hr(style={"borderColor": self.GRID}),
-            self.heading("Readout"),
-            html.Div(id="readout"),
-            html.Hr(style={"borderColor": self.GRID}),
-            self.model_caption(),
-            self.caption(
-                {
-                    "states shown": "1 … N on the ITP scale",
-                    "BD": "strictly inside (1, N)",
-                    "clipping": "none, by construction",
-                }
             ),
         ]
 
@@ -735,12 +761,12 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
             ("BD", record["BD"], self.DEFAULT),
             ("E[Sₜ]", record["mu_t"], axis_color),
         ):
-            figure.add_vline(
-                x=float(to_itp_scale(value, num_states)),
-                line=dict(color=color, width=1.5, dash="dash"),
-                annotation_text=label,
-                annotation_position="top",
-                annotation_font=dict(color=color, size=15),
+            self.add_reference_line(
+                figure=figure,
+                orientation="v",
+                position=float(to_itp_scale(value, num_states)),
+                label=label,
+                color=color,
             )
 
         figure.update_xaxes(
@@ -755,20 +781,9 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
             title="③  pₜ = h · exp(η·s) / Z,   with  E[pₜ] = E[Sₜ]",
             height=430,
         )
+        figure.update_layout(barmode="overlay")
 
-        figure.update_layout(
-            barmode="overlay",
-            legend=dict(
-                font=dict(color=self.MUTED, size=14),
-                bgcolor="rgba(0,0,0,0)",
-                orientation="h",
-                y=1.08,
-                x=0.5,
-                xanchor="center",
-            ),
-        )
-
-        return figure
+        return self.legend_on_top(figure=figure, margin_top=124)
 
     def figure_iterate(
         self,
@@ -810,12 +825,12 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
             ("BD", record["BD"], self.DEFAULT),
             ("T", record["partner_target"], self.PARTNER),
         ):
-            figure.add_hline(
-                y=float(to_itp_scale(value, num_states)),
-                line=dict(color=color, width=1.5, dash="dash"),
-                annotation_text=label,
-                annotation_position="right",
-                annotation_font=dict(color=color, size=15),
+            self.add_reference_line(
+                figure=figure,
+                orientation="h",
+                position=float(to_itp_scale(value, num_states)),
+                label=label,
+                color=color,
             )
 
         figure.update_xaxes(title="exchange")
@@ -825,11 +840,90 @@ class LASSIFormalModelVisualizer(FormalModelVisualizer):
             dtick=1,
         )
 
-        return self.style_figure(
+        figure = self.style_figure(
             figure=figure,
             title="④  The same exchange, repeated against an unchanged partner",
             height=340,
         )
+
+        return self.legend_on_top(figure=figure)
+
+    def add_reference_line(
+        self,
+        figure: go.Figure,
+        orientation: str,
+        position: float,
+        label: str,
+        color: str,
+    ) -> None:
+        """
+        Draw a dashed reference line and name it, with its value, in the legend.
+
+        Labels at the line itself collide whenever two lines lie close
+        together, which the default parameters already produce; the legend
+        cannot overlap and is not clipped at the plot edge.
+
+        Args:
+            figure: Figure to draw into.
+            orientation: "h" for a horizontal line at y, "v" for a vertical
+                line at x.
+            position: Value at which the line is drawn.
+            label: Name of the line in the legend.
+            color: Colour of the line and of its legend entry.
+
+        Returns:
+        """
+
+        line = dict(color=color, width=1.5, dash="dash")
+
+        if orientation == "h":
+            figure.add_hline(y=position, line=line)
+        else:
+            figure.add_vline(x=position, line=line)
+
+        figure.add_trace(
+            go.Scatter(
+                x=[None],
+                y=[None],
+                mode="lines",
+                line=line,
+                name=f"{label}  {position:.2f}",
+                hoverinfo="skip",
+            )
+        )
+
+    def legend_on_top(
+        self,
+        figure: go.Figure,
+        margin_top: int = 96,
+    ) -> go.Figure:
+        """
+        Place the legend in one band between the title and the plot.
+
+        Args:
+            figure: Styled figure.
+            margin_top: Top margin in pixels, enough for the title and every
+                row the legend wraps into.
+
+        Returns:
+            Figure with the legend above the plot area.
+        """
+
+        figure.update_layout(
+            showlegend=True,
+            margin=dict(t=margin_top),
+            legend=dict(
+                font=dict(color=self.MUTED, size=13),
+                bgcolor="rgba(0,0,0,0)",
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                x=0,
+                xanchor="left",
+            ),
+        )
+
+        return figure
 
     def readout(
         self,
